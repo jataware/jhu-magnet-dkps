@@ -1,0 +1,98 @@
+title: "JHU DKPS based per-instance metric prediction"
+description: |
+  We can predict whether a particular model will produce the correct output based on the performance of similar models in Data Kernel Perspective Space (DKPS).
+  Evaluation uses separate embedding and test queries: a small set of queries builds the DKPS model space, then predictions are made on disjoint unseen queries.
+  Multiple replicates with different random seeds are run to assess stability.
+
+claim:
+  python: |
+    assert auc > auc_threshold, assert_failed_msg
+
+symbols:
+  helm_suite_path:
+    type: str
+    value: '/Users/bjohnson/data/crfm-helm-public/lite/benchmark_output/runs/_all'
+
+  dataset:
+    type: str
+    value: "med_qa"
+
+  metric:
+    type: str
+    value: "exact_match"
+
+  auc_threshold:
+    type: float
+    value: 0.5
+
+  seed:
+    type: int
+    sweep: [1, 2, 3]
+
+  num_embedding_queries:
+    type: int
+    value: 50
+
+  num_eval_samples:
+    type: int
+    value: 75
+
+  num_example_runs:
+    type: int
+    value: 50
+
+  assert_failed_msg:
+    type: str
+    depends_on:
+      - auc_threshold
+      - seed
+    python: |
+      assert_failed_msg = "Seed {}: AUC was not above expected threshold of: {:0.3f}".format(seed, auc_threshold)
+
+  auc:
+    type: float
+    depends_on:
+      - helm_suite_path
+      - dataset
+      - metric
+      - seed
+      - num_embedding_queries
+      - num_eval_samples
+      - num_example_runs
+    python: |
+      import numpy as np
+      from sklearn.metrics import roc_auc_score
+      from magnet.instance_predictor import InstancePrediction
+      from magnet.helm_outputs import HelmSuite
+      from jhu_ta1.algorithms.dkps_instance_predictor import DKPSInstancePredictor
+
+      np.random.seed(seed)
+
+      predictor = DKPSInstancePredictor(
+          random_seed=seed,
+          num_example_runs=num_example_runs,
+          num_eval_samples=num_eval_samples,
+          num_embedding_queries=num_embedding_queries,
+          n_components_cmds=8,
+          dataset=dataset,
+      )
+
+      train_split, test_split = predictor.prepare_all_dataframes(HelmSuite(helm_suite_path))
+      sequestered_test_split = test_split.sequester()
+      eval_instance_stats_df = test_split.per_instance_stats
+
+      predictions = predictor.predict(train_split, sequestered_test_split)
+      predicted_df = InstancePrediction.to_df(predictions)
+
+      comparison = predictor.compare_predicted_to_actual(predicted_df, eval_instance_stats_df)
+
+      comparison_metric = comparison[comparison['stat_name'] == metric]
+      y = comparison_metric['actual_mean']
+      y_hat = comparison_metric['predicted_mean']
+
+      try:
+          auc = float(roc_auc_score(y, y_hat))
+      except ValueError:
+          auc = 0.0
+
+      print(f"Seed {seed}: AUC = {auc:.4f}")

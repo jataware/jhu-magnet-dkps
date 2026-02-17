@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools >= 80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+namespaces = true
+include = ["jhu_ta1*"]
+
+[tool.setuptools.package-data]
+jhu_ta1 = ["cards/*.yaml"]
+
+[tool.setuptools.dynamic]
+version = {attr = "jhu_ta1.__version__"}
+
+[project.entry-points."helm.run_specs"]
+run_specs = "jhu_ta1.backends.helm.run_specs"
+
+[project]
+name = "jhu_ta1"
+dynamic = ["version"]
+description = "Example TA1 algorithm implementation for MAGNET"
+readme = "README.md"
+authors = [
+    {name = "MAGNET Kitware", email = "aiq-ta2@kitware.com"}
+]
+urls = { "Repository" = "https://github.com/AIQ-Kitware/aiq-magnet/" }
+requires-python = ">=3.11"
+dependencies = [
+    # The [optional] flag here is used to include optional
+    # dependencies in the aiq-magnet install (needed for the HELM
+    # download utility)
+    "aiq-magnet[optional] @ git+https://github.com/AIQ-Kitware/aiq-magnet@a802afe",  # pinning to the `a802afe` commit
+    # We have a version of `aiq-magnet` hosted on PyPI and intend to
+    # push semi-regular updates there once the API stabalizes.  For
+    # now, pointing to the GitHub repository will be sure to get you
+    # the latest version.  If you want to use the PyPI version,
+    # comment out the above line and uncomment this one:
+    # "aiq-magnet[optional]",
+    # Add your other Python dependencies here
+    "dkps @ git+https://github.com/jataware/dkps",
+    "httpx>=0.28.1,<0.29",
+]
