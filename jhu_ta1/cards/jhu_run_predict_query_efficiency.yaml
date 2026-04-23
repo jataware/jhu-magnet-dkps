@@ -1,0 +1,92 @@
+title: "DKPS run-level prediction: per-replicate win rate vs naive sample mean"
+
+description: |
+  CLAIM: At a 4-query budget, DKPS predicts a held-out target model's
+  full-benchmark score with smaller absolute error than the naive sample-mean
+  estimator on at least 65% of (dataset, sampling-replicate) configurations
+  across the HELM datasets tested.
+
+  Each sweep point is ONE replicate: a (dataset_cfg, seed) pair. Per-point we
+  run DKPSRunPredictor exactly once (it samples a random target model,
+  subsamples `n_eval` queries, fits DKPS on `num_example_runs` reference
+  models, emits a single scalar prediction). The claim assertion compares
+  DKPS's absolute error to sample-mean's:
+
+      |p_dkps - actual| < |p_sample - actual|
+
+  Across the full sweep of `|dataset_cfg| x |seed|` points, the card-level
+  `reduce: fraction` asserts this holds on >= 65% of points.
+
+  Scope: med_qa (valid split) and 5 legalbench subsets (test split) — the
+  datasets available in the reference HELM suite on disk. Each dataset
+  carries its own (metric, split) pair, so the sweep is over joint
+  configurations, not independent symbols.
+
+claim:
+  python: |
+    err_dkps   = abs(_result['p_dkps']   - _result['actual'])
+    err_sample = abs(_result['p_sample'] - _result['actual'])
+    assert err_dkps < err_sample, (
+      f"[{dataset_cfg['dataset']} seed={seed}] target={_result['target_run_spec']} "
+      f"|dkps-actual|={err_dkps:.4f} >= |sample-actual|={err_sample:.4f} "
+      f"(actual={_result['actual']:.3f} p_dkps={_result['p_dkps']:.3f} p_sample={_result['p_sample']:.3f})"
+    )
+  reduce:
+    type: fraction
+    threshold: 0.65
+
+symbols:
+  helm_suite_path:
+    type: str
+    value: '/Users/bjohnson/data/crfm-helm-public/lite/benchmark_output/runs/_all'
+
+  n_eval:
+    type: int
+    value: 4
+
+  num_example_runs:
+    type: int
+    value: 64
+
+  n_components_cmds:
+    type: int
+    value: 8
+
+  # Joint sweep over (dataset, metric, split). Sweeping these as independent
+  # symbols would incorrectly cartesian-product them.
+  dataset_cfg:
+    type: Any
+    sweep:
+      - {dataset: "med_qa",                                                metric: "exact_match", split: "valid"}
+      - {dataset: "legalbench:subset=abercrombie",                         metric: "exact_match", split: "test"}
+      - {dataset: "legalbench:subset=corporate_lobbying",                  metric: "exact_match", split: "test"}
+      - {dataset: "legalbench:subset=function_of_decision_section",        metric: "exact_match", split: "test"}
+      - {dataset: "legalbench:subset=international_citizenship_questions", metric: "exact_match", split: "test"}
+      - {dataset: "legalbench:subset=proa",                                metric: "exact_match", split: "test"}
+
+  seed:
+    type: int
+    sweep: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+
+  _result:
+    type: Any
+    depends_on:
+      - helm_suite_path
+      - dataset_cfg
+      - n_eval
+      - seed
+      - num_example_runs
+      - n_components_cmds
+    python: |
+      from jhu_ta1.algorithms.claim_helpers import run_one_replicate
+      _result = run_one_replicate(
+          helm_suite_path=helm_suite_path,
+          dataset=dataset_cfg['dataset'],
+          metric=dataset_cfg['metric'],
+          split=dataset_cfg['split'],
+          n_eval=n_eval,
+          seed=seed,
+          num_example_runs=num_example_runs,
+          n_components_cmds=n_components_cmds,
+      )
+
