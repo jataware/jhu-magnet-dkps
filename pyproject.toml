@@ -37,10 +37,9 @@ dependencies = [
     # comment out the above line and uncomment this one:
     # "aiq-magnet[optional]",
     # Add your other Python dependencies here
-    "dkps @ git+https://github.com/jataware/dkps",
+    "dkps @ git+https://github.com/jataware/dkps@magnet",
     "httpx>=0.28.1,<0.29",
 ]
 
 [tool.uv.sources]
-dkps = { path = "../../", editable = true }
 aiq-magnet = { path = "../aiq-magnet", editable = true }
