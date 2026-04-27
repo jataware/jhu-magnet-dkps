@@ -28,7 +28,7 @@ claim:
     err_sample = abs(_result['p_sample'] - _result['actual'])
     assert err_dkps < err_sample, (
       f"[{dataset_cfg['dataset']} seed={seed}] target={_result['target_run_spec']} "
-      f"|dkps-actual|={err_dkps:.4f} >= |sample-actual|={err_sample:.4f} "
+      f"DKPS MAE={err_dkps:.4f} >= Sample MAE={err_sample:.4f} "
       f"(actual={_result['actual']:.3f} p_dkps={_result['p_dkps']:.3f} p_sample={_result['p_sample']:.3f})"
     )
   reduce:
