@@ -1,0 +1,36 @@
+__doc__: |
+  DKPS instance prediction: one fit per seed.
+
+      dkps_auc[seed]
+
+  Runs under kwdagger on its own:
+
+      python -m kwdagger.schedule \
+          --pipeline jhu_ta1/magnet/dkps_pipeline.yaml \
+          --root_dpath ./runs \
+          --params "
+              matrix:
+                dkps_auc.seed: [1, 2, 3]
+                dkps_auc.helm_suite_path: /data/crfm-helm-public/lite/benchmark_output/runs/v1.0.0
+          " --run=1
+
+  jhu_instance_predict_auc_kwdagger.yaml points at this file and adds the
+  claim.
+
+nodes:
+  dkps_auc:
+    executable: 'python -m jhu_ta1.magnet.dkps_auc'
+    out_paths:
+      out_fpath: 'dkps_auc.json'
+    primary_out_key: out_fpath
+    algo_params:
+      helm_suite_path: null
+      dataset: med_qa
+      metric: exact_match
+      n_components_cmds: 8
+      num_embedding_queries: 50
+      num_eval_samples: 75
+      # Cannot exceed the med_qa runs the suite holds. HELM lite v1.0.0 has 31,
+      # and asking for more raises "Sample larger than population".
+      num_example_runs: 25
+      seed: 1

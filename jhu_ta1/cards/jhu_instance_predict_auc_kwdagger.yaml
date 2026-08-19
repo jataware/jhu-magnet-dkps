@@ -1,0 +1,51 @@
+title: "JHU DKPS based per-instance metric prediction"
+
+description: |
+  We can predict whether a particular model will produce the correct output based on the performance of similar models in Data Kernel Perspective Space (DKPS).
+  Evaluation uses separate embedding and test queries: a small set of queries builds the DKPS model space, then predictions are made on disjoint unseen queries.
+  Multiple replicates with different random seeds are run to assess stability.
+
+  Pipeline form of `jhu_instance_predict_auc.yaml`. One job per seed, one
+  verdict per seed, and an unchanged card reuses the fits it already has.
+
+version: 1.0
+
+organizations:
+  - JHU
+
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+
+tags:
+  - dkps
+  - instance-prediction
+  - benchmark-evaluation
+
+links:
+  - title: "DKPS"
+    url: "https://github.com/jataware/dkps"
+    type: "code"
+
+  - title: "HELM Lite"
+    url: "https://crfm.stanford.edu/helm/lite/latest/"
+    type: "dataset"
+
+kwdagger:
+  pipeline: ../magnet/dkps_pipeline.yaml
+  result_node: dkps_auc
+
+  matrix:
+    dkps_auc.helm_suite_path: /data/crfm-helm-public/lite/benchmark_output/runs/v1.0.0
+    dkps_auc.seed:
+      - 1
+      - 2
+      - 3
+
+evidence:
+  - measures: metrics.dkps_auc.auc
+    relation: {gt: 0.5}
+    scope: "med_qa exact_match, 3 seeds, 25 example runs from HELM lite v1.0.0"
+    relaxes: >
+      AUC above chance on one dataset and one metric, at the sample sizes this
+      suite supports; the claim is about instance prediction in general.

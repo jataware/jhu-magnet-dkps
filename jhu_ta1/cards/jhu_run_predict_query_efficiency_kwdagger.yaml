@@ -1,0 +1,65 @@
+title: 'DKPS run-level prediction: per-replicate win rate vs naive sample mean'
+
+description: |
+  CLAIM
+    Informally: On a randomly drawn (dataset, target model, 4-query sample),
+    given a sufficient number of training models, DKPS predicts the model's 
+    benchmark score more accurately than the naive sample mean more often than not.
+  
+    Formally: A replicate r is a (dataset, target_model, train_models, query_set) tuple --
+    a held-out model, a set of training models, and a random 4-query sample from one dataset.
+    Let R be the set of replicates evaluated. 
+    
+    Per replicate, record the absolute prediction error of each estimator:
+        err_dkps[r]   = abs( DKPS_predict(r) - true_score(r) )
+        err_sample[r] = abs( sample_mean(r)  - true_score(r) )
+  
+    The claim is:
+        For at least 65% of r in R : err_dkps[r] < err_sample[r]
+
+version: 1.0
+
+organizations:
+  - JHU
+
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+
+tags:
+  - dkps
+  - query-efficiency
+  - benchmark-evaluation
+
+links:
+  - title: "DKPS"
+    url: "https://github.com/jataware/dkps"
+    type: "code"
+
+kwdagger:
+  pipeline: ../magnet/query_efficiency_pipeline.yaml
+  result_node: query_efficiency
+
+  matrix:
+    query_efficiency.helm_suite_path: /data/crfm-helm-public/lite/benchmark_output/runs/v1.0.0
+    query_efficiency.dataset_cfg:
+      - 'med_qa|quasi_exact_match'
+      - 'legalbench:subset=abercrombie|quasi_exact_match'
+      - 'legalbench:subset=corporate_lobbying|quasi_exact_match'
+      - 'legalbench:subset=function_of_decision_section|quasi_exact_match'
+      - 'legalbench:subset=international_citizenship_questions|quasi_exact_match'
+      - 'legalbench:subset=proa|quasi_exact_match'
+      - 'wmt_14:language_pair=cs-en|bleu_4'
+      - 'wmt_14:language_pair=de-en|bleu_4'
+      - 'wmt_14:language_pair=fr-en|bleu_4'
+      - 'wmt_14:language_pair=hi-en|bleu_4'
+      - 'wmt_14:language_pair=ru-en|bleu_4'
+    query_efficiency.seed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+
+evidence:
+  - measures: metrics.query_efficiency.err_gap
+    relation: {lt: 0.0}
+    scope: "11 dataset configurations x 16 seeds, HELM lite v1.0.0"
+    relaxes: >
+      One held-out run per replicate, at the example-run count the local suite
+      supports.

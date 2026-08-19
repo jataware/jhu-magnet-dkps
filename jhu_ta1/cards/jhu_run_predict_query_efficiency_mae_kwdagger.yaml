@@ -1,0 +1,69 @@
+title: 'DKPS run-level prediction: 2x query efficiency (MAE in expectation)'
+
+description: |
+  CLAIM
+    Informally: On most datasets, given a sufficient number of training models,
+    DKPS predicts a model's benchmark score at least as accurately from 4 queries 
+    as the naive sample mean does from 8.
+  
+    Formally: Let D be the set of evaluation datasets. For each dataset d, run
+    N = 32 Monte-Carlo replicates. Replicate r draws a random target model
+    (target_models), random training models (train_models) and random query samples, 
+    then computes the absolute prediction error of each estimator:
+  
+        err_dkps[d][r]   = abs( DKPS_predict(target_models, train_models, queries=4) - true_score(target_models) )
+        err_sample[d][r] = abs( sample_mean(target_models,  queries=8) - true_score(target_models) )
+  
+    The per-dataset MAE is the average of those N per-replicate errors:
+  
+        MAE_dkps(d)   = (1/N) * sum over r of  err_dkps[d][r]
+        MAE_sample(d) = (1/N) * sum over r of  err_sample[d][r]
+  
+    The claim is:
+        For at least 80% of d in D : MAE_dkps(d) <= MAE_sample(d)
+
+version: 1.0
+
+organizations:
+  - JHU
+
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+
+tags:
+  - dkps
+  - query-efficiency
+  - benchmark-evaluation
+
+links:
+  - title: "DKPS"
+    url: "https://github.com/jataware/dkps"
+    type: "code"
+
+kwdagger:
+  pipeline: ../magnet/query_efficiency_mae_pipeline.yaml
+  result_node: query_efficiency_mae
+
+  matrix:
+    query_efficiency_mae.helm_suite_path: /data/crfm-helm-public/lite/benchmark_output/runs/v1.0.0
+    query_efficiency_mae.dataset_cfg:
+      - 'med_qa|quasi_exact_match'
+      - 'legalbench:subset=abercrombie|quasi_exact_match'
+      - 'legalbench:subset=corporate_lobbying|quasi_exact_match'
+      - 'legalbench:subset=function_of_decision_section|quasi_exact_match'
+      - 'legalbench:subset=international_citizenship_questions|quasi_exact_match'
+      - 'legalbench:subset=proa|quasi_exact_match'
+      - 'wmt_14:language_pair=cs-en|bleu_4'
+      - 'wmt_14:language_pair=de-en|bleu_4'
+      - 'wmt_14:language_pair=fr-en|bleu_4'
+      - 'wmt_14:language_pair=hi-en|bleu_4'
+      - 'wmt_14:language_pair=ru-en|bleu_4'
+
+evidence:
+  - measures: metrics.query_efficiency_mae.mae_gap
+    relation: {le: 0.0}
+    scope: "11 dataset configurations, 32 replicates each, HELM lite v1.0.0"
+    relaxes: >
+      DKPS reads 4 queries and the baseline samples 8; both numbers are the
+      card's, not a property of the method.

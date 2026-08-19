@@ -1,0 +1,33 @@
+__doc__: |
+  Query-efficiency MAE: replicates averaged, one job per dataset_cfg.
+
+      query_efficiency_mae[dataset_cfg]
+
+  Runs under kwdagger on its own:
+
+      python -m kwdagger.schedule \
+          --pipeline jhu_ta1/magnet/query_efficiency_mae_pipeline.yaml \
+          --root_dpath ./runs --backend serial --run=1 \
+          --params "
+              matrix:
+                query_efficiency_mae.dataset_cfg: ['med_qa|quasi_exact_match']
+                query_efficiency_mae.helm_suite_path: /data/crfm-helm-public/lite/benchmark_output/runs/v1.0.0
+          "
+
+nodes:
+  query_efficiency_mae:
+    executable: 'python -m jhu_ta1.magnet.query_efficiency_mae'
+    out_paths:
+      out_fpath: 'query_efficiency_mae.json'
+    primary_out_key: out_fpath
+    algo_params:
+      helm_suite_path: null
+      dataset_cfg: 'med_qa|quasi_exact_match'
+      n_eval_small: 4
+      n_eval_large: 8
+      num_replicates: 32
+      base_seed: 1
+      num_example_runs: 25
+      n_components_cmds: 8
+      embed_provider: sentence-transformers
+      embed_model: nomic-ai/nomic-embed-text-v2-moe

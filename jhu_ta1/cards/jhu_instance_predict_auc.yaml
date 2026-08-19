@@ -1,4 +1,31 @@
 title: "JHU DKPS based per-instance metric prediction"
+
+version: 1.0
+
+organizations:
+  - JHU
+
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+
+tags:
+  - instance-prediction
+  - dkps
+  - med_qa
+  - helm-lite
+
+links:
+  - title: "Statistical inference on black-box generative models in the data kernel perspective space"
+    url: "https://arxiv.org/abs/2410.01106"
+    type: "publication"
+  - title: "med_qa"
+    url: "https://huggingface.co/datasets/bigbio/med_qa"
+    type: "dataset"
+  - title: "Precomputed HELM lite benchmark outputs"
+    url: "https://console.cloud.google.com/storage/browser/crfm-helm-public/lite"
+    type: "asset"
+
 description: |
   We can predict whether a particular model will produce the correct output based on the performance of similar models in Data Kernel Perspective Space (DKPS).
   Evaluation uses separate embedding and test queries: a small set of queries builds the DKPS model space, then predictions are made on disjoint unseen queries.
