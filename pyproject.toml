@@ -26,16 +26,10 @@ authors = [
 urls = { "Repository" = "https://github.com/AIQ-Kitware/aiq-magnet/" }
 requires-python = ">=3.11"
 dependencies = [
-    # The [optional] flag here is used to include optional
-    # dependencies in the aiq-magnet install (needed for the HELM
-    # download utility)
-    "aiq-magnet[optional] @ git+https://github.com/AIQ-Kitware/aiq-magnet",
-    # We have a version of `aiq-magnet` hosted on PyPI and intend to
-    # push semi-regular updates there once the API stabalizes.  For
-    # now, pointing to the GitHub repository will be sure to get you
-    # the latest version.  If you want to use the PyPI version,
-    # comment out the above line and uncomment this one:
-    # "aiq-magnet[optional]",
+    # From PyPI. 0.1.0 is the first release with the kwdagger execution API
+    # (magnet.process_node) and the materialize CLI the pipelines use; the
+    # [optional] extra brings the HELM loaders and download utility.
+    "aiq-magnet[optional]>=0.1.0",
     # Add your other Python dependencies here
     "dkps @ git+https://github.com/jataware/dkps@magnet",
     "httpx>=0.28.1,<0.29",

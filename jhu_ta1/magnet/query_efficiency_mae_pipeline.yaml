@@ -1,0 +1,65 @@
+__doc__: |
+  Query-efficiency MAE: replicates averaged, one job per dataset_cfg.
+
+      query_efficiency_mae[dataset_cfg]
+
+  Runs under kwdagger on its own:
+
+      python -m kwdagger.schedule \
+          --pipeline jhu_ta1/magnet/query_efficiency_mae_pipeline.yaml \
+          --root_dpath ./runs --backend serial --run=1 \
+          --params "
+              matrix:
+                query_efficiency_mae.dataset_cfg: ['med_qa|quasi_exact_match']
+                materialize_lite.precomputed_roots: /data/crfm-helm-public
+          "
+
+nodes:
+  # Acquisition is part of the pipeline (goal.md 5.7): the suite the scorer
+  # reads is produced by this node, symlinked out of a precomputed root when
+  # one holds it (`precomputed_roots`, a perf param: where the bytes come
+  # from is not part of the suite's identity) and downloaded from the public
+  # bucket otherwise. The scorer's helm_suite_path is then a produced path,
+  # hashed relative to the run root, so the same card has the same identity
+  # on every machine.
+  materialize_lite:
+    class: magnet.process_node.MagnetProcessNode
+    executable: 'python -m magnet.backends.helm.cli.materialize_helm_suite'
+    algo_params:
+      benchmark: lite
+      version: v1.0.0
+      runs: 'regex:(med_qa|legalbench|wmt_14).*'
+    perf_params:
+      precomputed_roots: ''
+      download: auto
+    out_paths:
+      suite_dpath: benchmark_output/runs/v1.0.0
+      # The manifest is primary: kwdagger's generic loader parses the primary
+      # output as JSON when it walks predecessors, and a bare DONE breaks it.
+      manifest_fpath: materialize_manifest.json
+      done_fpath: DONE
+    primary_out_key: manifest_fpath
+  query_efficiency_mae:
+    # Containerization is opt-in per node class. A plain YAML node ignores
+    # --container_image, and MAGNET refuses such a run rather than report a
+    # host result as a containerized one. This class is inert without an
+    # image, so the host route is unchanged.
+    class: magnet.process_node.MagnetProcessNode
+    executable: 'python -m jhu_ta1.magnet.query_efficiency_mae'
+    out_paths:
+      out_fpath: 'query_efficiency_mae.json'
+    primary_out_key: out_fpath
+    in_paths: [helm_suite_path]
+    algo_params:
+      dataset_cfg: 'med_qa|quasi_exact_match'
+      n_eval_small: 4
+      n_eval_large: 8
+      num_replicates: 32
+      base_seed: 1
+      num_example_runs: 25
+      n_components_cmds: 8
+      embed_provider: sentence-transformers
+      embed_model: nomic-ai/nomic-embed-text-v2-moe
+
+edges:
+  - materialize_lite.suite_dpath -> query_efficiency_mae.helm_suite_path

@@ -10,6 +10,13 @@ from sklearn.linear_model import LinearRegression, LogisticRegression
 from dkps.dkps import DataKernelPerspectiveSpace as DKPS
 from dkps.helm import compute_embeddings, make_embedding_dict, uses_onehot, DEFAULT_EMBED_PROVIDER, DEFAULT_EMBED_MODEL
 
+# Theory annotations against theory/indexes/dkps-144de76c.yaml in the eval
+# superrepo. Inert at run time -- the decorators return their target unchanged
+# -- and MAGNET reads them out of the source with `ast`, so an audit imports
+# neither sklearn nor dkps. Import as a namespace: bare-name calls extract
+# nothing, silently.
+import magnet.theory as theory
+
 # --
 # Predictor
 
@@ -65,6 +72,49 @@ class DKPSInstancePredictor(InstancePredictor):
     def run_spec_filter(self, run_spec):
         return run_spec['name'].startswith(self.dataset)
 
+    # Helm2025.DKPS.Theorem1 is about exactly this method: a learning rule
+    # applied to ESTIMATED DKPS embeddings, and whether its risk converges to
+    # the risk it would have on the true embeddings. Its four lettered
+    # assumptions A1-A4 are the premises below; the card's own statement link
+    # and the loss assumption live in the scoring node, dkps_auc.py.
+    #
+    # A1 (`h_inv`) is worth recording as DISCHARGED rather than left blank. It
+    # is the hypothesis one would most expect a raw-coordinate regression to
+    # fail, and it happens not to: both fits are unchanged by rotation and
+    # translation of the coordinates -- the intercept absorbs translation and
+    # the L2 penalty is rotation-invariant.
+    @theory.satisfies('Helm2025.DKPS.Theorem1::h_inv',
+                      note='A1 holds: OLS and L2-regularized logistic predictions are invariant '
+                           'to affine isometries of the embedding')
+    @theory.satisfies('Helm2025.DKPS.Theorem1::h_meas_psi',
+                      note='the embedding estimator is a fixed finite-dimensional computation on '
+                           'sampled responses, hence measurable')
+    @theory.assumes('Helm2025.DKPS.Theorem1::h_align',
+                    note='alignment consistency -- paper Eq. (3) -- is never certified. DKPS '
+                         'aligns at n_components_cmds components; that the aligned geometry '
+                         'converges to the true one at these query budgets is asserted by use, '
+                         'not by evidence')
+    # A3 asks for a learning rule with COMPACT RANGE. Nothing here clips -- that
+    # is the RUN-level predictor, not this one. The binary branch returns
+    # predict_proba,
+    # which is in [0,1] by construction; the fallback regression branch returns
+    # an unbounded LinearRegression output. Which branch runs is decided per
+    # instance by `is_binary`, so the range is compact for the card's usual
+    # exact_match labels and not compact in general.
+    @theory.approximates('Helm2025.DKPS.Theorem1::h_bound_learn',
+                         note='A3 holds only on the binary branch, where predict_proba lies in '
+                              '[0,1]. The `is_binary` fallback fits a LinearRegression whose '
+                              'output is unbounded and is never clipped')
+    # A2 asks for a CONTINUOUS learning rule. The sklearn fits are continuous in
+    # the design almost everywhere, but the rule as a whole is not: `is_binary`
+    # switches between two different estimators as a function of the training
+    # labels, and that switch is a discontinuity in the rule itself rather than
+    # in either fit. The sparse one-hot geometry used for the multiple-choice
+    # datasets is where ties make it reachable.
+    @theory.approximates('Helm2025.DKPS.Theorem1::h_cont_learn',
+                         note='A2: each fit is continuous a.e., but the is_binary branch switches '
+                              'between LogisticRegression and LinearRegression as a function of '
+                              'the training labels, which is a discontinuity in the learning rule')
     def predict(self,
         train_split: TrainSplit,
         sequestered_test_split: SequesteredTestSplit

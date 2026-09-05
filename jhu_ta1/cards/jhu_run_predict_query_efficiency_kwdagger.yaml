@@ -1,0 +1,130 @@
+name: jhu_run_predict_query_efficiency
+
+title: 'DKPS run-level prediction: per-replicate win rate vs naive sample mean'
+
+description: |
+  CLAIM
+    Informally: On a randomly drawn (dataset, target model, 4-query sample),
+    given a sufficient number of training models, DKPS predicts the model's 
+    benchmark score more accurately than the naive sample mean more often than not.
+  
+    Formally: A replicate r is a (dataset, target_model, train_models, query_set) tuple --
+    a held-out model, a set of training models, and a random 4-query sample from one dataset.
+    Let R be the set of replicates evaluated. 
+    
+    Per replicate, record the absolute prediction error of each estimator:
+        err_dkps[r]   = abs( DKPS_predict(r) - true_score(r) )
+        err_sample[r] = abs( sample_mean(r)  - true_score(r) )
+  
+    The claim is:
+        For at least 65% of r in R : err_dkps[r] < err_sample[r]
+
+  Population under test:
+    11 dataset configurations x 16 seeds, HELM lite v1.0.0
+
+  Relaxation -- what this run does not establish:
+    one held-out run per replicate, at the example-run count the local
+    suite supports
+
+version: 1.0
+
+organizations:
+  - JHU
+
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+
+tags:
+  - dkps
+  - query-efficiency
+  - benchmark-evaluation
+
+links:
+  - title: "DKPS"
+    url: "https://github.com/jataware/dkps"
+    type: "code"
+
+# What this card's verdict stands on.
+#
+# `EmpiricalWinRateClaim` is the proposition the node computes an ingredient of
+# -- the per-replicate strict-win comparison -- and it is annotated at the code
+# site in ../magnet/query_efficiency.py. The population statement below is what
+# the card shadows.
+#
+# The finding to carry away: the card is named for query efficiency but the two
+# arms get the SAME query budget. `run_one_replicate` takes one `n_eval` and
+# derives both `p_dkps` and `p_sample` from it, so nothing here exercises the
+# cross-budget structure the theorem is about. The MAE card is the one that
+# does (4 queries against 8).
+#
+# `empirical_sources` is read with `ast`; nothing is imported.
+theory:
+  indexes:
+    - ../../theory/indexes/dkps-144de76c.yaml
+
+  empirical_sources:
+    - ../magnet/query_efficiency.py
+    - ../algorithms/claim_helpers.py
+
+  links:
+    - relation: approximates
+      ref: DkpsQuench2026.Paper.OLS.highProb_queryEfficient_crossBudget_of_affineRiskGap
+      note: >
+        The theorem is a cross-budget, asymptotic, high-probability statement
+        about population squared risk. The card measures a per-replicate
+        absolute-error win at EQUAL budgets and at one fixed reference-pool
+        size. The shape is the same; the quantifiers are not.
+
+kwdagger:
+  pipeline: ../magnet/query_efficiency_pipeline.yaml
+  result_node: query_efficiency
+
+  matrix:
+    # Where a precomputed copy of the suite lives on this box, or '' to
+    # download the matching runs. Not identity-bearing (a perf param).
+    materialize_lite.precomputed_roots: ''
+    query_efficiency.dataset_cfg:
+      - 'med_qa|quasi_exact_match'
+      - 'legalbench:subset=abercrombie|quasi_exact_match'
+      - 'legalbench:subset=corporate_lobbying|quasi_exact_match'
+      - 'legalbench:subset=function_of_decision_section|quasi_exact_match'
+      - 'legalbench:subset=international_citizenship_questions|quasi_exact_match'
+      - 'legalbench:subset=proa|quasi_exact_match'
+      - 'wmt_14:language_pair=cs-en|bleu_4'
+      - 'wmt_14:language_pair=de-en|bleu_4'
+      - 'wmt_14:language_pair=fr-en|bleu_4'
+      - 'wmt_14:language_pair=hi-en|bleu_4'
+      - 'wmt_14:language_pair=ru-en|bleu_4'
+    query_efficiency.seed: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+
+symbols:
+  # The threshold, declared rather than buried in the assert, so a run can
+  # override it from the command line and the dashboard can show what was
+  # tested against.
+  threshold:
+    type: float
+    value: 0.0
+
+claim:
+  python: |
+    m = metrics.query_efficiency
+    value = m.err_gap
+
+
+    # A measure that did not compute is not a measure below threshold.
+    if value is None:
+        raise RuntimeError(
+            'err_gap was not produced by the query_efficiency node'
+        )
+
+    print(f"[jhu_run_predict_query_efficiency] err_gap={value} (need < {threshold})")
+    assert value < threshold, (
+        f"err_gap ({value}) is not below {threshold}"
+    )
+
+# Tie the snapshot to the grid this invocation requested. Results in the
+# shared DAG root from another grid are not contamination, but a card that
+# reports a verdict should say which cells it read.
+evidence:
+  scope: requested

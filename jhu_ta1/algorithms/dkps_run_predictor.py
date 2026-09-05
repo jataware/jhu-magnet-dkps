@@ -11,6 +11,13 @@ from dkps.helm import (
     DEFAULT_EMBED_PROVIDER, DEFAULT_EMBED_MODEL,
 )
 
+# Records what this predictor assumes about the DKPS formalization, against
+# theory/indexes/dkps-144de76c.yaml in the eval superrepo. Inert at run time --
+# the decorators return their target unchanged -- and MAGNET reads them out of
+# the source with `ast`, so an audit never imports sklearn, dkps or HELM.
+# Import it as a namespace: bare-name calls extract nothing, silently.
+import magnet.theory as theory
+
 
 class DKPSRunPredictor(RunPredictor):
     """Predict run-level aggregate score (e.g. mean quasi_exact_match over a full benchmark)
@@ -76,6 +83,73 @@ class DKPSRunPredictor(RunPredictor):
     def run_spec_filter(self, run_spec):
         return run_spec['name'].startswith(self.dataset)
 
+    # What the run-level MAE card's population statement needs from this method,
+    # and what it gets. Statement:
+    # DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap
+    #
+    # `hgap` and `hcompetitive` are the two premises the OLS route added, and
+    # they are the whole story. Both are stated in terms of the TRUE perspective
+    # embedding psi. This method never computes psi -- only the estimate coming
+    # out of DKPS below -- so neither premise is unobserved by accident. They
+    # are unobservable in principle from what the card measures, and they must
+    # stay `assumes` until either an estimator for the population MSE gap exists
+    # or the theorem is restated in estimated coordinates.
+    #
+    # The estimator binds the theorem faithfully: the OLS theorem's `fit` binder
+    # is an exact least-squares minimizer, which is what `LinearRegression().fit`
+    # computes. What is NOT discharged is the pair of premises below.
+    @theory.assumes('DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap::hgap',
+                    note='the non-vacuity condition of the whole theorem: that an affine witness '
+                         'in TRUE perspective coordinates beats the baseline in population MSE. '
+                         'psi is never computed and the witness theta is never constructed, so '
+                         'the card can exhibit the empirical inequality with this false, and vice '
+                         'versa')
+    @theory.assumes('DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap::hcompetitive',
+                    note='that the fitted OLS asymptotically matches the affine witness in risk. '
+                         'Asymptotic in the reference-pool size, and the card fits on one fixed '
+                         'pool (64 runs), so there is no empirical trace of the limit. The usual '
+                         'informal justification -- close in DKPS space implies close in score -- '
+                         'is PROVED insufficient by '
+                         'DkpsQuench2026.Paper.OLS.lipschitz_not_sufficient_for_affineRealizability, '
+                         'a three-point configuration that is 2-Lipschitz in the feature and '
+                         'admits no affine fit')
+    @theory.satisfies('DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap::habs',
+                      note='HELM scores lie in [0,1] and y_hat is clipped to [0,1] below, so the '
+                           'absolute error is bounded and integrable. The clipping is proved '
+                           'harmless: empiricalMAE_clipUnit_le shows pointwise clipping to [0,1] '
+                           'cannot increase empirical MAE when the truth lies in [0,1]')
+    @theory.satisfies('DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap::hsq',
+                      note='bounded error implies square-integrability against a probability '
+                           'measure; same clipping argument as habs')
+    # The geometry underneath. DKPS coordinates only mean anything if the
+    # embedding recovers the population geometry, and this is the statement that
+    # would make them so -- MDS embeddings of consistently estimated
+    # dissimilarities recovering pairwise distances in probability.
+    #
+    # `approximates` and not `tests`: the conclusion is recovery of PAIRWISE
+    # DISTANCES along a subsequence. The jump from "distances are recovered" to
+    # "a regression on these coordinates predicts benchmark scores" is itself
+    # unformalized; no statement in the index bridges it.
+    @theory.approximates('Acharyya2024.Consistency.fixed_models_fixed_queries_consistency_of_uniqueProfile',
+                         note='DKPS classical-MDS coordinates stand in for the consistent MDS '
+                              'configuration the statement is about')
+    @theory.substitutes('Acharyya2024.Consistency.fixed_models_fixed_queries_consistency_of_uniqueProfile::hpsihat',
+                        note='DKPS uses CLASSICAL MDS -- closed-form double-centering and '
+                             'eigendecomposition -- which minimizes strain, not the raw stress '
+                             'the theorem requires. The two agree when the dissimilarities are '
+                             'exactly Euclidean and disagree otherwise, and nothing checks which '
+                             'case obtains. The sharpest surviving estimator gap in this set')
+    @theory.assumes('Acharyya2024.Consistency.fixed_models_fixed_queries_consistency_of_uniqueProfile::huniq',
+                    note='the unique-pair-profile condition is never checked. Flagged in the Lean '
+                         'source itself as an extra assumption beyond the paper. Near-degenerate '
+                         'spectra break it, and a blind top-8 truncation (n_components_cmds) is '
+                         'exactly where that happens. Checkable: a runtime `checks` on the '
+                         'eigenvalue gap would be cheap')
+    @theory.approximates('Acharyya2024.Consistency.fixed_models_fixed_queries_consistency_of_uniqueProfile::hD',
+                         note='dissimilarities come from a single draw of num_eval_samples '
+                              'queries; there is no growing budget and no convergence diagnostic, '
+                              'so nothing observes the convergence in probability the premise asks '
+                              'for')
     def predict(
         self,
         train_split: TrainSplit,

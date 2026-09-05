@@ -1,0 +1,233 @@
+# Theorem index: DKPS formalization (JHU), pin 144de76c.
+#
+# Converted from the legacy index schema by theory/convert_index.py; the prior
+# version is in git history, including its per-theorem commentary.
+#
+# The pin is 22 commits behind the checked-out submodule (0ef9e8d5), but the
+# four declaration-bearing files are untouched across that range, so the index
+# is still accurate at HEAD. `axioms` and `review` from the legacy schema are
+# folded into each entry's statement under PROVENANCE -- the new schema has no
+# field for them, and dropping them silently would lose the one column that
+# says whether the kernel actually checked the proof.
+#
+# The load-bearing finding, preserved here because it is easy to lose: the
+# query-efficiency theorem now proves the result for a fitted OLS, so the card's
+# estimator binds it faithfully -- at the cost of two premises (`hcompetitive`,
+# `hgap`) stated in terms of the TRUE embedding, which the experiment never
+# computes. The gap is no longer "the theorem is about something else" but "the
+# theorem's non-vacuity condition is unobservable in principle".
+
+schema_version: 1
+formalization:
+  system: lean4
+  repository: https://github.com/AIQ-Kitware/aiq-dkps-formalization
+  revision: 144de76c950a2210abc1e0f14eb820f7a787b9a3
+entries:
+- id: DkpsQuench2026.Paper.OLS.highProb_queryEfficient_crossBudget_of_affineRiskGap
+  kind: theorem
+  declaration: DkpsQuench2026.Paper.OLS.highProb_queryEfficient_crossBudget_of_affineRiskGap
+  statement: 'A fitted OLS predictor is cross-budget query-efficient when it asymptotically
+    reaches an affine witness whose population MSE is strictly below the selected sample-score
+    baseline.
+
+
+    CONCLUSION: HighProbQQueryEfficient under squared loss: eventually, with high probability,
+    the risk of the fitted-OLS predictor is at most the risk of the subset-score baseline.
+
+
+    STRUCTURAL (data binders, not assumptions -- excluded from premise coverage): Pf: Pf :
+    Measure (Model Q X), [IsProbabilityMeasure Pf]; psi: psi : Finset Q -> Model Q X -> Vec
+    d; psiHat: psiHat : Nat -> Omega -> Finset Q -> Model Q X -> Vec d; f_ref: f_ref : forall
+    n, Omega -> Fin n -> Model Q X; score: score : Model Q X -> Finset Q -> Real; Qstar: the
+    full benchmark query set defining the quantity being predicted; Qols: the query subset
+    the embedding and the OLS design are computed from; Qbaseline: the query subset the baseline''s
+    subset-score is averaged over; fit: fit : forall n omega, OLSFit (psiHat n omega Qols
+    . f_ref) (score . Qstar); theta: the affine witness: coefficients in TRUE perspective
+    coordinates
+
+
+    PROVENANCE: axioms [''propext'', ''Classical.choice'', ''Quot.sound''], review ''self-assessed''.'
+  source_path: DkpsQuench2026/Paper/OLSQueryEfficiency.lean
+  premises:
+  - id: hmu
+    type: 'hmu : forall n, IsProbabilityMeasure (mu n)'
+    statement: each stage of the estimation-randomness sequence is a probability measure
+  - id: hcompetitive
+    type: 'hcompetitive : HighProbAffineRiskCompetitive mu hmu Pf (yFull score Qstar) (yOLS_paper
+      ...) (psi Qols) theta'
+    statement: the fitted OLS predictor is high-probability affine-risk competitive with the
+      witness -- asymptotically it does at least as well as theta
+  - id: hgap
+    type: 'hgap : MSE Pf (yFull score Qstar) (affineModel theta (psi Qols)) < MSE Pf (yFull
+      score Qstar) (yQ score Qbaseline)'
+    statement: the affine witness strictly beats the baseline in population MSE. This is what
+      makes the conclusion non-vacuous, and it is a statement about the population, not about
+      any sample.
+- id: DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap
+  kind: theorem
+  declaration: DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap
+  statement: 'The same cross-budget query-efficiency conclusion in population MEAN ABSOLUTE
+    ERROR, obtained from the MSE result through the MSE-to-MAE bridge.
+
+
+    CONCLUSION: PopulationMAEQueryEfficiency: eventually, with high probability, the population
+    MAE of the fitted-OLS predictor is at most that of the subset-score baseline.
+
+
+    STRUCTURAL (data binders, not assumptions -- excluded from premise coverage): Pf: a probability
+    distribution over models; psi: the true perspective embedding; psiHat: the estimated perspective
+    embedding actually fitted on; f_ref: the reference models supplying the design at each
+    budget; score: the benchmark scoring function; Qstar: the full benchmark query set; Qols:
+    the query subset the embedding and design come from; Qbaseline: the query subset the baseline
+    averages over; fit: an exact OLS minimizer exists at every budget and draw; theta: the
+    affine witness in true perspective coordinates
+
+
+    PROVENANCE: axioms [''propext'', ''Classical.choice'', ''Quot.sound''], review ''self-assessed''.'
+  source_path: DkpsQuench2026/Paper/TheoryPractice.lean
+  premises:
+  - id: hmu
+    statement: each stage of the estimation-randomness sequence is a probability measure
+  - id: hcompetitive
+    statement: the fitted OLS is asymptotically at least as good as the witness
+  - id: hgap
+    type: 'hgap : MSE Pf (yFull score Qstar) (affineModel theta (psi Qols)) < (populationMAE
+      Pf (yFull score Qstar) (yQ score Qbaseline)) ^ 2'
+    statement: the witness's population MSE is below the SQUARE of the baseline's population
+      MAE -- a strictly stronger margin than the MSE version needs, and the price of stating
+      the conclusion in MAE
+  - id: habs
+    statement: the absolute error of the OLS predictor is integrable against Pf
+  - id: hsq
+    statement: the squared error of the OLS predictor is integrable against Pf
+- id: DkpsQuench2026.Paper.TheoryPractice.EmpiricalCrossBudgetMAEClaim
+  kind: theorem
+  declaration: DkpsQuench2026.Paper.TheoryPractice.EmpiricalCrossBudgetMAEClaim
+  statement: 'Finite empirical MAE comparison over n evaluation units: the candidate''s mean
+    absolute error is at most the baseline''s.
+
+
+    CONCLUSION: empiricalMAE truth candidate <= empiricalMAE truth baseline
+
+
+    NOTE: A definition, so it has no axioms of its own. The query budgets are deliberately
+    NOT arguments -- they belong to the construction of `candidate` and `baseline`, which
+    keeps this proposition purely numerical and makes explicit that it is not the same proposition
+    as PopulationMSEQueryEfficiency.
+
+
+    STRUCTURAL (data binders, not assumptions -- excluded from premise coverage): n: the number
+    of finite evaluation units averaged over; truth: the quantity being predicted, per evaluation
+    unit; candidate: the candidate predictor''s output, per evaluation unit; baseline: the
+    baseline predictor''s output, per evaluation unit
+
+
+    PROVENANCE: review ''self-assessed''.'
+  source_path: DkpsQuench2026/Paper/TheoryPractice.lean
+- id: DkpsQuench2026.Paper.TheoryPractice.EmpiricalWinRateClaim
+  kind: theorem
+  declaration: DkpsQuench2026.Paper.TheoryPractice.EmpiricalWinRateClaim
+  statement: 'Finite strict-win-rate comparison: the candidate has strictly smaller absolute
+    error than the baseline on at least `threshold` of the units.
+
+
+    CONCLUSION: threshold <= empiricalWinFraction truth candidate baseline
+
+
+    STRUCTURAL (data binders, not assumptions -- excluded from premise coverage): threshold:
+    the required win fraction; n: the number of finite evaluation units; truth: the quantity
+    being predicted, per unit; candidate: the candidate predictor''s output, per unit; baseline:
+    the baseline predictor''s output, per unit
+
+
+    PROVENANCE: review ''self-assessed''.'
+  source_path: DkpsQuench2026/Paper/TheoryPractice.lean
+- id: DkpsQuench2026.Paper.TheoryPractice.empiricalMAE_clipUnit_le
+  kind: theorem
+  declaration: DkpsQuench2026.Paper.TheoryPractice.empiricalMAE_clipUnit_le
+  statement: 'Pointwise clipping to [0,1] cannot increase finite empirical MAE.
+
+
+    CONCLUSION: empiricalMAE truth (clipUnit . prediction) <= empiricalMAE truth prediction
+
+
+    PROVENANCE: axioms [''propext'', ''Classical.choice'', ''Quot.sound''], review ''self-assessed''.'
+  source_path: DkpsQuench2026/Paper/TheoryPractice.lean
+  premises:
+  - id: htruth
+    type: 'htruth : forall i, 0 <= truth i and truth i <= 1'
+    statement: every true value lies in [0,1]
+- id: DkpsQuench2026.Paper.OLS.lipschitz_not_sufficient_for_affineRealizability
+  kind: theorem
+  declaration: DkpsQuench2026.Paper.OLS.lipschitz_not_sufficient_for_affineRealizability
+  statement: 'Lipschitz score regularity does not by itself imply affine realizability in
+    perspective coordinates: an explicit three-point configuration is 2-Lipschitz in the feature
+    yet admits no affine fit.
+
+
+    CONCLUSION: A closed statement -- the three-point target is Lipschitz in the feature AND
+    there exist no affine coefficients reproducing it.
+
+
+    NOTE: No hypotheses: a finite counterexample, fully closed. Cite it as `evidence=` on
+    a `violates` edge rather than paraphrasing it.
+
+
+    PROVENANCE: axioms [''propext'', ''Classical.choice'', ''Quot.sound''], review ''self-assessed''.'
+  source_path: DkpsQuench2026/Paper/OLSQueryEfficiency.lean
+- id: Acharyya2024.Consistency.fixed_models_fixed_queries_consistency_of_uniqueProfile
+  kind: theorem
+  declaration: Acharyya2024.Consistency.fixed_models_fixed_queries_consistency_of_uniqueProfile
+  statement: 'MDS embeddings of consistently-estimated dissimilarities recover the population
+    pairwise distances, along a subsequence, in probability.
+
+
+    CONCLUSION: There is a subsequence and a true minimizer whose pairwise distances the estimated
+    configurations converge to in probability.
+
+
+    PROVENANCE: axioms [''propext'', ''Classical.choice'', ''Quot.sound''], review ''self-assessed''.'
+  source_path: Acharyya2024/Consistency.lean
+  premises:
+  - id: hpsihat
+    type: 'hpsihat : forall r omega, psihat r omega in MDS n d (Dseq r omega)'
+    statement: each estimated configuration is an EXACT raw-stress MDS minimizer of the observed
+      dissimilarity matrix
+  - id: huniq
+    type: 'huniq : RawStress.UniquePairProfile n d DeltaInf'
+    statement: the limiting dissimilarity matrix has a unique minimizer distance profile.
+      Flagged in the source as an EXTRA assumption beyond the paper.
+  - id: hD
+    type: 'hD : ConvergesInProbabilityZero P (fun r omega => frobSub (Dseq r omega) DeltaInf)'
+    statement: observed dissimilarities converge to the limit in probability
+- id: Helm2025.DKPS.Theorem1
+  kind: theorem
+  declaration: Helm2025.DKPS.Theorem1
+  statement: 'As the estimation budget grows, the risk of a learning rule applied to ESTIMATED
+    embeddings converges to its risk on the true embeddings.
+
+
+    CONCLUSION: Tendsto (fun u => Rhat_l n d d'' P learn loss (psi_hat u)) atTop (nhds (R_l
+    n d d'' P learn loss))
+
+
+    PROVENANCE: axioms [''propext'', ''Classical.choice'', ''Quot.sound''], review ''self-assessed''.'
+  source_path: Helm2025/Inference.lean
+  premises:
+  - id: h_meas_psi
+    statement: the embedding estimators are measurable. Flagged in the source as an extra
+      assumption beyond the paper.
+  - id: h_align
+    statement: the estimated embeddings are alignment-consistent -- paper Eq. (3), the condition
+      that the estimated geometry converges to the true one up to the alignment transform
+  - id: h_inv
+    statement: 'A1: the learning rule is invariant to affine isometries of the embedding'
+  - id: h_cont_learn
+    statement: 'A2: the learning rule is continuous'
+  - id: h_bound_learn
+    statement: 'A3: the learning rule has compact range'
+  - id: h_cont_loss
+    statement: 'A4: the loss is jointly continuous. Strengthened relative to the paper.'
+  - id: h_bound_label
+    statement: labels have compact (bounded) support
+

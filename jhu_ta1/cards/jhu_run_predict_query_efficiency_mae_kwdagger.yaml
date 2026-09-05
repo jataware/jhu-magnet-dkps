@@ -1,0 +1,150 @@
+name: jhu_run_predict_query_efficiency_mae
+
+title: 'DKPS run-level prediction: 2x query efficiency (MAE in expectation)'
+
+description: |
+  CLAIM
+    Informally: On most datasets, given a sufficient number of training models,
+    DKPS predicts a model's benchmark score at least as accurately from 4 queries 
+    as the naive sample mean does from 8.
+  
+    Formally: Let D be the set of evaluation datasets. For each dataset d, run
+    N = 32 Monte-Carlo replicates. Replicate r draws a random target model
+    (target_models), random training models (train_models) and random query samples, 
+    then computes the absolute prediction error of each estimator:
+  
+        err_dkps[d][r]   = abs( DKPS_predict(target_models, train_models, queries=4) - true_score(target_models) )
+        err_sample[d][r] = abs( sample_mean(target_models,  queries=8) - true_score(target_models) )
+  
+    The per-dataset MAE is the average of those N per-replicate errors:
+  
+        MAE_dkps(d)   = (1/N) * sum over r of  err_dkps[d][r]
+        MAE_sample(d) = (1/N) * sum over r of  err_sample[d][r]
+  
+    The claim is:
+        For at least 80% of d in D : MAE_dkps(d) <= MAE_sample(d)
+
+  Population under test:
+    11 dataset configurations, 32 replicates each, HELM lite v1.0.0
+
+  Relaxation -- what this run does not establish:
+    DKPS reads 4 queries and the baseline samples 8; both numbers are
+    the card's, not a property of the method
+
+version: 1.0
+
+organizations:
+  - JHU
+
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+
+tags:
+  - dkps
+  - query-efficiency
+  - benchmark-evaluation
+
+links:
+  - title: "DKPS"
+    url: "https://github.com/jataware/dkps"
+    type: "code"
+
+# What this card's verdict stands on.
+#
+# Two propositions, deliberately kept apart. `EmpiricalCrossBudgetMAEClaim` is
+# what the node LITERALLY computes -- the match is definitional, so the link is
+# `tests` and it is annotated at the code site in ../magnet/query_efficiency_mae.py.
+# `highProbMAE_queryEfficient_crossBudget_of_affineRiskGap` is what the card
+# SHADOWS, and it is where every gap lives; it is `approximates` here and its
+# premises are annotated on DKPSRunPredictor.predict.
+#
+# Separating them is what stops "the card asserts a proved inequality" from
+# being said about the population theorem, which it is not.
+#
+# `empirical_sources` is read with `ast` -- nothing is imported, so auditing
+# this card needs neither sklearn nor a HELM suite. The annotations sit at the
+# code sites, so they move with the code instead of rotting the way the earlier
+# line-numbered `site=` references did.
+#
+# The unaccounted premises this is meant to surface are `hgap` and
+# `hcompetitive`. Both are stated in terms of the TRUE perspective embedding,
+# which the experiment never computes, so they are `assumes` and they must stay
+# `assumes`: this is not "unchecked", it is "unobservable in principle from
+# what the card measures".
+theory:
+  indexes:
+    - ../../theory/indexes/dkps-144de76c.yaml
+
+  empirical_sources:
+    - ../magnet/query_efficiency_mae.py
+    - ../algorithms/dkps_run_predictor.py
+
+  links:
+    - relation: approximates
+      ref: DkpsQuench2026.Paper.TheoryPractice.highProbMAE_queryEfficient_crossBudget_of_affineRiskGap
+      note: >
+        The card measures a finite empirical shadow of this population
+        conclusion: one MAE comparison at fixed budgets, rather than an
+        eventual high-probability risk inequality. The conclusion is asymptotic
+        in the reference-pool size and holds with high probability; the card
+        runs at a single pool size (num_example_runs = 64) and reports a point
+        estimate over 32 replicates. No part of the card estimates the
+        probability the conclusion is quantified over.
+
+kwdagger:
+  pipeline: ../magnet/query_efficiency_mae_pipeline.yaml
+  result_node: query_efficiency_mae
+
+  matrix:
+    # Where a precomputed copy of the suite lives on this box, or '' to
+    # download the matching runs. Not identity-bearing (a perf param).
+    materialize_lite.precomputed_roots: ''
+    query_efficiency_mae.dataset_cfg:
+      - 'med_qa|quasi_exact_match'
+      - 'legalbench:subset=abercrombie|quasi_exact_match'
+      - 'legalbench:subset=corporate_lobbying|quasi_exact_match'
+      - 'legalbench:subset=function_of_decision_section|quasi_exact_match'
+      - 'legalbench:subset=international_citizenship_questions|quasi_exact_match'
+      - 'legalbench:subset=proa|quasi_exact_match'
+      - 'wmt_14:language_pair=cs-en|bleu_4'
+      - 'wmt_14:language_pair=de-en|bleu_4'
+      - 'wmt_14:language_pair=fr-en|bleu_4'
+      - 'wmt_14:language_pair=hi-en|bleu_4'
+      - 'wmt_14:language_pair=ru-en|bleu_4'
+
+symbols:
+  # The threshold, declared rather than buried in the assert, so a run can
+  # override it from the command line and the dashboard can show what was
+  # tested against.
+  threshold:
+    type: float
+    value: 0.0
+
+claim:
+  python: |
+    m = metrics.query_efficiency_mae
+    value = m.mae_gap
+
+    # No replicate means no estimate of the gap.
+    if not m.num_replicates:
+        raise RuntimeError(
+            f'{m.dataset}/{m.metric}: no replicate completed'
+        )
+
+    # A measure that did not compute is not a measure below threshold.
+    if value is None:
+        raise RuntimeError(
+            'mae_gap was not produced by the query_efficiency_mae node'
+        )
+
+    print(f"[jhu_run_predict_query_efficiency_mae] mae_gap={value} (need <= {threshold})")
+    assert value <= threshold, (
+        f"mae_gap ({value}) is not at or below {threshold}"
+    )
+
+# Tie the snapshot to the grid this invocation requested. Results in the
+# shared DAG root from another grid are not contamination, but a card that
+# reports a verdict should say which cells it read.
+evidence:
+  scope: requested

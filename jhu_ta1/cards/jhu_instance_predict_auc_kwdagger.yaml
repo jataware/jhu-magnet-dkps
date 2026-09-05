@@ -1,0 +1,117 @@
+name: jhu_instance_predict_auc
+
+title: "JHU DKPS based per-instance metric prediction"
+
+description: |
+  We can predict whether a particular model will produce the correct output based on the performance of similar models in Data Kernel Perspective Space (DKPS).
+  Evaluation uses separate embedding and test queries: a small set of queries builds the DKPS model space, then predictions are made on disjoint unseen queries.
+  Multiple replicates with different random seeds are run to assess stability.
+
+  Pipeline form of `jhu_instance_predict_auc.yaml`. One job per seed, one
+  verdict per seed, and an unchanged card reuses the fits it already has.
+
+  Population under test:
+    med_qa exact_match, 3 seeds, 25 example runs from HELM lite v1.0.0
+
+  Relaxation -- what this run does not establish:
+    AUC above chance on one dataset and one metric, at the sample sizes
+    this suite supports; the claim is about instance prediction in
+    general
+
+version: 1.0
+
+organizations:
+  - JHU
+
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+
+tags:
+  - dkps
+  - instance-prediction
+  - benchmark-evaluation
+
+links:
+  - title: "DKPS"
+    url: "https://github.com/jataware/dkps"
+    type: "code"
+
+  - title: "HELM Lite"
+    url: "https://crfm.stanford.edu/helm/lite/latest/"
+    type: "dataset"
+
+# What this card's verdict stands on.
+#
+# `Helm2025.DKPS.Theorem1` is about exactly what this card runs: a learning
+# rule applied to estimated DKPS embeddings. What it CONCLUDES is convergence
+# -- as the estimation budget grows, the estimated-embedding risk tends to the
+# true-embedding risk. The card asserts a point, AUC above 0.5 at one pool
+# size. A point above chance is not a statement about a limit, and no
+# hypothesis in the theorem bridges them; hence `approximates`, annotated at
+# the code site in ../magnet/dkps_auc.py.
+#
+# The premise worth reading first is `h_cont_loss`, recorded as `violates`:
+# assumption A4 asks for a jointly continuous loss and AUC is a
+# piecewise-constant rank statistic. That is not a weaker conclusion, it is
+# outside the hypothesis.
+#
+# `empirical_sources` is read with `ast`; nothing is imported.
+theory:
+  indexes:
+    - ../../theory/indexes/dkps-144de76c.yaml
+
+  empirical_sources:
+    - ../magnet/dkps_auc.py
+    - ../algorithms/dkps_instance_predictor.py
+
+kwdagger:
+  pipeline: ../magnet/dkps_pipeline.yaml
+  result_node: dkps_auc
+
+  matrix:
+    # Where a precomputed copy of the suite lives on this box, or '' to
+    # download the matching runs. Not identity-bearing (a perf param).
+    materialize_lite.precomputed_roots: ''
+    dkps_auc.seed:
+      - 1
+      - 2
+      - 3
+
+symbols:
+  # The threshold, declared rather than buried in the assert, so a run can
+  # override it from the command line and the dashboard can show what was
+  # tested against.
+  threshold:
+    type: float
+    value: 0.5
+
+claim:
+  python: |
+    m = metrics.dkps_auc
+    value = m.auc
+
+    # A degenerate fit produced no usable ranking, so its AUC is not a
+    # measurement of anything. Inconclusive, not refuted.
+    if m.degenerate:
+        raise RuntimeError(
+            f'seed {m.seed}: the fit was degenerate over '
+            f'{m.n_scored_instances} scored instances -- no usable ranking'
+        )
+
+    # A measure that did not compute is not a measure below threshold.
+    if value is None:
+        raise RuntimeError(
+            'auc was not produced by the dkps_auc node'
+        )
+
+    print(f"[jhu_instance_predict_auc] auc={value} (need > {threshold})")
+    assert value > threshold, (
+        f"auc ({value}) is not above {threshold}"
+    )
+
+# Tie the snapshot to the grid this invocation requested. Results in the
+# shared DAG root from another grid are not contamination, but a card that
+# reports a verdict should say which cells it read.
+evidence:
+  scope: requested

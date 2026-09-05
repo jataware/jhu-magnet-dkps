@@ -1,0 +1,8 @@
+.git
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+evaluation_runs/
+runs/
+# HELM results are mounted or downloaded at run time, never baked.
+data/
