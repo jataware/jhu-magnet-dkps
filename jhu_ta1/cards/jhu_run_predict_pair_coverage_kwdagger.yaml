@@ -1,0 +1,105 @@
+name: jhu_run_predict_pair_coverage
+title: 'DKPS: lower expected error for over 95% of dataset–model–budget combinations'
+description: |
+  CLAIM
+    For more than 95% of (dataset, model, query budget) combinations, DKPS has lower
+    expected absolute score-estimation error than the same-budget sample mean.
+
+  EVALUATION
+    1. Select datasets from a HELM suite, a common set of target models,
+       and query budgets before evaluating outcomes.
+    2. For each (dataset, target model, query budget m), repeatedly draw
+       random samples of m queries.
+    3. For each sample, embed responses and fit DKPS using reference models
+       and their benchmark scores, excluding the target's provider family.
+       Estimate the target's score as:
+         dkps_score = 0.8*sample_mean + 0.2*dkps_prediction
+    4. Compare DKPS and the same-query sample mean with the target's
+       full-pool benchmark score. Record each estimate's absolute error.
+    5. Average each method's absolute errors over the repeated samples,
+       separately for each (dataset, target model, query budget).
+    6. Count combinations where DKPS has strictly lower average error.
+       The claim passes if these exceed 95% of all evaluated combinations.
+
+version: 1.0
+organizations: [JHU]
+submitter:
+  name: Ben Johnson
+  email: ben@jataware.com
+tags: [dkps, pair-coverage, benchmark-evaluation, live-helm]
+links:
+  - title: DKPS
+    url: https://github.com/jataware/dkps
+    type: code
+kwdagger:
+  pipeline: ../magnet/pair_coverage_pipeline.yaml
+  result_node: pair_coverage
+  matrix:
+    pair_coverage.helm_suite_path: null
+    pair_coverage.dataset_manifest: null
+    # One scalar parameter keeps all budgets inside the same evidence row.
+    pair_coverage.query_budgets: '1,2,4,8'
+symbols:
+  coverage_threshold:
+    type: float
+    value: 0.95
+claim:
+  python: |
+    m = metrics.pair_coverage
+
+    print(
+        f'Estimator: sample weight={m.alpha}, '
+        f'DKPS dimensions={m.n_components_cmds}'
+    )
+    assert m.alpha == 0.8 and m.n_components_cmds == 8, (
+        'Expected sample weight 0.8 and 8 DKPS dimensions'
+    )
+
+    budgets = [int(n) for n in m.budget_spec.split(',')]
+    print(
+        f'Evaluation: {m.num_datasets} datasets, {m.num_models} models, '
+        f'budgets {budgets}, {m.num_replicates} replicates per combination'
+    )
+    assert len(budgets) == len(set(budgets)) == m.num_budgets > 0, (
+        'Budgets must be distinct and match the reported count'
+    )
+
+    assert all(n in (1, 2, 4, 8) for n in budgets), (
+        'This card evaluates query budgets from 1, 2, 4, 8'
+    )
+
+    assert (
+        m.num_models > 0
+        and m.num_datasets > 0
+        and m.num_replicates >= 2
+    ), 'Need datasets, target models, and at least two replicates'
+
+    expected_settings = m.num_datasets * m.num_models * len(budgets)
+    print(
+        f'Completed: {m.num_settings}/{expected_settings} combinations, '
+        f'{m.dkps_fits} DKPS fits'
+    )
+    assert m.num_settings == expected_settings, (
+        'Every dataset/model/budget combination must be evaluated'
+    )
+
+    assert m.dkps_fits == expected_settings * m.num_replicates, (
+        'Expected one DKPS fit per combination and replicate'
+    )
+
+    assert 0 <= m.settings_improved <= m.num_settings, (
+        'Improvement count must be between zero and the number evaluated'
+    )
+
+    coverage = m.settings_improved / m.num_settings
+    print(
+        f'Claim: {m.settings_improved}/{m.num_settings} combinations improve '
+        f'({coverage:.2%}); required: more than {coverage_threshold:.0%}'
+    )
+    assert coverage > coverage_threshold, (
+        f'Only {coverage:.2%} improve; '
+        f'the claim requires more than {coverage_threshold:.0%}'
+    )
+
+evidence:
+  scope: requested

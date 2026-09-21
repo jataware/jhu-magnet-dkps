@@ -1,0 +1,24 @@
+__doc__: |
+  Fresh response embeddings and DKPS fits from a supplied HELM suite.
+  One node evaluates all requested budgets and counts improving
+  dataset/model/query-budget tuples, retaining per-budget diagnostics.
+  The manifest declares datasets/metrics, not saved predictions.
+nodes:
+  pair_coverage:
+    class: jhu_ta1.magnet.offline_helm_node.OfflineHelmProcessNode
+    executable: 'python -m jhu_ta1.magnet.pair_coverage'
+    in_paths: [helm_suite_path, dataset_manifest]
+    out_paths:
+      out_fpath: pair_coverage.json
+    primary_out_key: out_fpath
+    algo_params:
+      alpha: 0.8
+      query_budgets: '1,2,4,8'
+      n_components_cmds: 8
+      num_replicates: 1024
+      base_seed: 0
+      reference_models: 0
+      embed_provider: sentence-transformers
+      embed_model: nomic-ai/nomic-embed-text-v2-moe
+      confidence_level: 0.95
+      run_id: live-settings-v2

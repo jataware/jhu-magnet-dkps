@@ -135,6 +135,17 @@ values for random evaluation set selection).  In this case all three
 variations have been verified (claim passed), so the final `RESULT` of
 the card is that it is `"VERIFIED"`.
 
+## Dataset–model–budget coverage
+
+The `jhu_run_predict_pair_coverage_kwdagger.yaml` card tests whether DKPS has
+lower expected absolute score-estimation error than the same-budget sample mean
+for more than 95% of dataset/model/query-budget combinations. It computes response
+embeddings and DKPS predictions from a supplied HELM suite, using a fixed sample
+weight of 0.8 and eight DKPS dimensions.
+
+See [the pair-coverage guide](docs/live_pair_coverage.md) for the dataset manifest,
+Docker runner, output format, and tests.
+
 ## Citations
 
 [1] Hayden Helm, Aranyak Acharyya, Youngser Park, Brandon Duderstadt, and Carey Priebe. 2025. Statistical inference on black-box generative models in the data kernel perspective space. In Findings of the Association for Computational Linguistics: ACL 2025, pages 3955–3970, Vienna, Austria. Association for Computational Linguistics.

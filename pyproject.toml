@@ -7,7 +7,7 @@ namespaces = true
 include = ["jhu_ta1*"]
 
 [tool.setuptools.package-data]
-jhu_ta1 = ["cards/*.yaml"]
+jhu_ta1 = ["cards/*.yaml", "magnet/*.yaml", "magnet/*.json"]
 
 [tool.setuptools.dynamic]
 version = {attr = "jhu_ta1.__version__"}
@@ -38,6 +38,11 @@ dependencies = [
     # code loaded under trust_remote_code=True.
     "sentence-transformers>=3.1",
     "einops>=0.8",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "scikit-learn>=1.3",
+    "PyYAML>=6",
 ]
 
 [tool.uv.sources]
