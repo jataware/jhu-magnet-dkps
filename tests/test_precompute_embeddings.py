@@ -8,7 +8,7 @@ from unittest.mock import patch
 import numpy as np
 
 from jhu_ta1.magnet._embedding_cache import CachedResponseEmbeddings
-from jhu_ta1.magnet._helm_pair_data import Panel
+from jhu_ta1.magnet._helm_pair_data import Panel, load_panels
 from jhu_ta1.magnet.precompute_embeddings import (
     DEFAULT_MODEL,
     PROVIDER,
@@ -160,6 +160,91 @@ class PrecomputeTests(unittest.TestCase):
                 self.run_precompute(
                     tmp, panels, FakeEmbedder(), datasets=["math:subject=missing"]
                 )
+
+    def helm_suite(self, root, items=10):
+        """A real-format HELM suite: the loader and cache builder see the same files."""
+        for m in range(4):
+            model = f"family{m}/model"
+            directory = root / f"math:subject=fixture,model={model.replace('/', '_')}"
+            directory.mkdir()
+            states, scores = [], []
+            for i in range(items):
+                instance = dict(
+                    id=f"id{i}",
+                    split="test",
+                    input={"text": f"question {i}"},
+                    references=[{"output": {"text": "42"}, "tags": ["correct"]}],
+                )
+                states.append(
+                    dict(
+                        instance=instance,
+                        train_trial_index=0,
+                        result={"completions": [{"text": f"answer {m} {i}"}]},
+                    )
+                )
+                scores.append(
+                    dict(
+                        instance_id=f"id{i}",
+                        train_trial_index=0,
+                        stats={"accuracy": float((i + m) % 2)},
+                    )
+                )
+            (directory / "scenario_state.json").write_text(
+                json.dumps(dict(adapter_spec={"model": model}, request_states=states))
+            )
+            (directory / "display_predictions.json").write_text(json.dumps(scores))
+
+    def test_subsample_is_shared_between_the_cache_builder_and_the_card(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            suite, cache_dpath = Path(tmp) / "suite", Path(tmp) / "cache"
+            suite.mkdir()
+            self.helm_suite(suite)
+            entry = dict(
+                dataset="math:subject=fixture",
+                metric="accuracy",
+                max_items=4,
+                item_seed=5,
+            )
+            manifest = {"datasets": [entry]}
+            embedder = FakeEmbedder()
+            # No patching: precompute reads the manifest through the real loader.
+            precompute(
+                suite,
+                manifest,
+                cache_dpath,
+                lambda: embedder,
+                lambda name: False,
+                chunk_size=5,
+            )
+            # 4 models x 4 sampled items, not 4 x 10.
+            self.assertEqual(sum(len(c) for c in embedder.calls), 16)
+
+            panels, _ = load_panels(suite, manifest)
+            self.assertEqual(panels[0].pool_size, 4)
+            cache = CachedResponseEmbeddings(cache_dpath, PROVIDER, DEFAULT_MODEL)
+            cache.validate(panels)
+
+            # The card reading a different sample than the cache holds must fail,
+            # not silently use other items.
+            other = {"datasets": [{**entry, "item_seed": 6}]}
+            other_panels, _ = load_panels(suite, other)
+            self.assertNotEqual(panels[0].item_ids, other_panels[0].item_ids)
+            with self.assertRaisesRegex(ValueError, "Missing cached embedding"):
+                cache.validate(other_panels)
+
+            # A cache over the full pool serves any subsample of it.
+            full_cache = Path(tmp) / "full"
+            precompute(
+                suite,
+                {"datasets": [{**entry, "max_items": None}]},
+                full_cache,
+                lambda: FakeEmbedder(),
+                lambda name: False,
+                chunk_size=5,
+            )
+            CachedResponseEmbeddings(full_cache, PROVIDER, DEFAULT_MODEL).validate(
+                other_panels
+            )
 
     def test_repeated_item_ids_across_splits_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

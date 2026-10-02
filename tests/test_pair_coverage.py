@@ -151,6 +151,40 @@ class LivePairTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing accuracy"):
                 load_panels(root, manifest)
 
+    def test_max_items_subsamples_the_aligned_pool_deterministically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = self.fixture(root)
+            for entry in manifest["datasets"]:
+                entry.update(max_items=3, item_seed=7)
+            first, _ = load_panels(root, manifest)
+            again, _ = load_panels(root, manifest)
+            self.assertEqual([p.pool_size for p in first], [3, 3])
+            self.assertEqual([p.item_ids for p in first], [p.item_ids for p in again])
+            for panel in first:
+                self.assertEqual(panel.item_ids, sorted(panel.item_ids))
+                for model in panel.models:
+                    self.assertEqual(len(panel.responses[model]), 3)
+                    self.assertEqual(len(panel.scores[model]), 3)
+                self.assertEqual(len(panel.references), 3)
+                # The record of what each model actually held is the full pool.
+                self.assertEqual(set(panel.original_pool_sizes.values()), {8})
+            # A different seed picks a different subset; the full pool is the cap.
+            for entry in manifest["datasets"]:
+                entry["item_seed"] = 8
+            other, _ = load_panels(root, manifest)
+            self.assertNotEqual(
+                [p.item_ids for p in first], [p.item_ids for p in other]
+            )
+            for entry in manifest["datasets"]:
+                entry["max_items"] = 100
+            capped, _ = load_panels(root, manifest)
+            self.assertEqual([p.pool_size for p in capped], [8, 8])
+            for entry in manifest["datasets"]:
+                entry["max_items"] = 0
+            with self.assertRaisesRegex(ValueError, "max_items must be positive"):
+                load_panels(root, manifest)
+
     def test_loader_rejects_unaligned_item_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
