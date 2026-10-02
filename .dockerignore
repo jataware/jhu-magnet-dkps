@@ -9,3 +9,5 @@ data/
 .pixi/
 .venv/
 results/
+# Model weights and embedding caches live next to the checkout, never in the image.
+.cache/

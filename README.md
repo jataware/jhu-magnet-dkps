@@ -21,19 +21,35 @@ uv pip install .
 ### Downloading HELM results
 
 The example evaluation card requires precomputed HELM results on the
-helm-lite benchmark (specifically for the `med_qa` scenario).  If you
-do not already have these downloaded, the magnet framework provides a
-download utility for these results.  You can run the follow commands
-to download and link them into a single `_all` directory.
+helm-lite benchmark.  If you do not already have these downloaded, the magnet 
+framework provides a download utility for these results. You can run the following
+commands to download and link them into a single `_all` directory.
 
-```
-mkdir -p data/crfm-helm-public/lite/benchmark_output/runs/_all
+```bash
+function download_dataset {
+  DST=$1
+  DATASET=$2
+  mkdir -p $DST
+  magnet download helm --benchmark=lite --list-versions | while read version; do
+      magnet download helm data/crfm-helm-public --benchmark=lite --version="$version" --runs "regex:${DATASET}.*"
+      (cd $DST && ln -s "../$version"/* .)
+  done
+}
 
-magnet download helm --benchmark=lite --list-versions | while read version; do
-    magnet download helm data/crfm-helm-public --benchmark=lite --version="$version" --runs "regex:wmt.*"
-    (cd data/crfm-helm-public/lite/benchmark_output/runs/_all && ln -s "../$version"/* .)
-done
+DST=data/crfm-helm-public/lite/benchmark_output/runs/_all
+download_dataset $DST "wmt"
+download_dataset $DST "math"
+download_dataset $DST "med_qa"
+download_dataset $DST "legalbench"
+
+find $(dirname $DST) -type d | fgrep anthropic_claude-3-5-haiku-20241022 |\
+  fgrep ',stop=none' | xargs -I {} rm -r {}
+
+find $(dirname $DST) -type d | fgrep google_gemini-2.0-flash-exp |\
+  fgrep ',stop=none' | xargs -I {} rm -r {}
 ```
+
+### Linking pre-downloaded HELM results
 
 If you do already have them downloaded but not linked into a single
 `_all` directory you can run the following:
@@ -41,7 +57,10 @@ If you do already have them downloaded but not linked into a single
 ```
 mkdir -p data/crfm-helm-public/lite/benchmark_output/runs/_all
 cd data/crfm-helm-public/lite/benchmark_output/runs/_all
+ln -s /path/to/existing/helm/lite/runs/*/wmt* .
+ln -s /path/to/existing/helm/lite/runs/*/math* .
 ln -s /path/to/existing/helm/lite/runs/*/med_qa* .
+ln -s /path/to/existing/helm/lite/runs/*/legalbench* .
 cd -
 ```
 
@@ -55,7 +74,7 @@ Now that we have the package installed, we can run `magnet evaluate`
 on the example card..
 
 ```
-magnet evaluate jhu_ta1/cards/jhu_instance_predict_auc.yaml
+magnet evaluate jhu_ta1/cards/jhu_instance_predict_auc.yaml # [TODO]
 ```
 
 In the log output from the process, you should indications of symbols
@@ -140,14 +159,11 @@ the card is that it is `"VERIFIED"`.
 The `jhu_run_predict_pair_coverage_kwdagger.yaml` card tests whether DKPS has
 lower expected absolute score-estimation error than the same-budget sample mean
 for more than 95% of dataset/model/query-budget combinations. It computes response
-embeddings and DKPS predictions from HELM responses, using a fixed sample
+embeddings and DKPS predictions from a supplied HELM suite, using a fixed sample
 weight of 0.8 and eight DKPS dimensions.
 
-Start with [the containerization guide](docs/containerized_evaluation.md) to build
-the full image and run the card, including downloading its default datasets.
 See [the pair-coverage guide](docs/live_pair_coverage.md) for the dataset manifest,
-output format, and tests, or [the full-run guide](docs/full_pair_coverage.md) for
-the prepared 18-dataset evaluation with cached Google embeddings.
+Docker runner, output format, and tests.
 
 ## Citations
 

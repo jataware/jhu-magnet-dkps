@@ -24,7 +24,7 @@ authors = [
     {name = "MAGNET Kitware", email = "aiq-ta2@kitware.com"}
 ]
 urls = { "Repository" = "https://github.com/AIQ-Kitware/aiq-magnet/" }
-requires-python = ">=3.11"
+requires-python = "==3.11"
 dependencies = [
     # From PyPI. 0.1.0 is the first release with the kwdagger execution API
     # (magnet.process_node) and the materialize CLI the pipelines use; the
@@ -35,10 +35,9 @@ dependencies = [
     # Add your other Python dependencies here
     "dkps @ git+https://github.com/jataware/dkps@magnet",
     "httpx>=0.28.1,<0.29",
-    # Local embedding for text-embedding datasets (e.g. math via
-    # nomic-embed-text-v2-moe). einops is required by the nomic MoE custom
-    # code loaded under trust_remote_code=True.
     "sentence-transformers>=3.1",
+    # nomic's remote code needs get_extended_attention_mask, removed in 5.x.
+    "transformers<5",
     "einops>=0.8",
     "numpy>=1.24",
     "pandas>=2.0",
@@ -49,7 +48,7 @@ dependencies = [
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.pypi-dependencies]
 jhu_ta1 = { path = ".", editable = true }
