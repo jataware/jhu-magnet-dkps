@@ -115,16 +115,8 @@ python -m magnet.evaluation_new \
     materialize_lite.download          : never
     materialize_lite.runs              : 'regex:^(med_qa|legalbench|math|wmt_14)[:,].*'
     pair_coverage.dataset_manifest     : "$REPO/jhu_ta1/cards/manifest_full.json" 
-    pair_coverage.embedding_cache_path : '$CACHE'
-    pair_coverage.num_replicates       : 128"
+    pair_coverage.embedding_cache_path : '$CACHE'"
 ```
-
-*GPU:* kwdagger launches each node with a plain `docker run`, so the containers do
-not see the GPU unless you ask for it. With a complete embedding cache this does not
-matter (`pair_coverage` only reads vectors and fits DKPS, which is CPU work). Without
-a cache, `pair_coverage` embeds MATH and WMT responses itself, and does so on the CPU
-unless you add `--container_docker_args '--gpus all'` (or `'--gpus device=0'`) to
-the `magnet.evaluation_new` command.
 
 Once the card has been fully evaluated, you should see something like the following:
 
@@ -141,9 +133,10 @@ INFO     CARD STATUS: EVALUATED            evaluation.py:455
 
 ```
 
-*Note:* If you want to run faster, you can set `pair_coverage.num_replicates` to 8, 16, 32, etc.  That will make the evaluation run faster but increases noise / reduces statistical significance of results.
-
-*Also Note:* I tried to increase the parallelism here, but because of the way the aggregation works, the manifests were getting aggregated independently, and the 95% check being applied to each on their own.  The likelihood that _one_ of the individal splits doesn't meet the 95% mark is increased, so probability to reject _one_ of the splits and thus the _whole_ claim is increased.  So - I'm sure there are better ways to parallelize - but need to make sure that everything gets re-combined before the final 95% test.
+### Run Notes
+- If you want to run faster, you can set `pair_coverage.num_replicates` to 8, 16, 32, etc.  That will make the evaluation run faster but increases noise / reduces statistical significance of results.
+- I tried to increase the parallelism here, but because of the way the aggregation works, the manifests were getting aggregated independently, and the 95% check being applied to each on their own.  The likelihood that _one_ of the individal splits doesn't meet the 95% mark is increased, so probability to reject _one_ of the splits and thus the _whole_ claim is increased.  So - I'm sure there are better ways to parallelize - but need to make sure that everything gets re-combined before the final 95% test.
+- kwdagger launches each node with a plain `docker run`, so the containers do not see the GPU unless you ask for it. With a complete embedding cache this does not matter (`pair_coverage` only reads vectors and fits DKPS, which is CPU work). Without a cache, `pair_coverage` embeds MATH and WMT responses itself, and does so on the CPU unless you add `--container_docker_args '--gpus all'` (or `'--gpus device=0'`) to the `magnet.evaluation_new` command.
 
 ## Citations
 

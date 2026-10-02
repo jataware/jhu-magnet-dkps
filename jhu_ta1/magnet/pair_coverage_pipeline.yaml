@@ -30,7 +30,7 @@ nodes:
       alpha             : 0.8       # [Note] Parameter for ensembling DKPS w/ sample mean.
       query_budgets     : '1,2,4,8' # [Note] Query budgets at which claim is evaluated.
       n_components_cmds : 8         # [Note] If the number of reference models is small, this needs to be decreased.
-      num_replicates    : 128       # [Note] Increasing this increases likelihood of CONFIRMED, but increases runtime.
+      num_replicates    : 64        # [Note] Increasing this increases likelihood of CONFIRMED, but increases runtime. 64 seems like an OK balance between variance and my own impatience.
       base_seed         : 0
       reference_models  : 0
       embed_provider    : sentence-transformers
