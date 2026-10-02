@@ -70,56 +70,69 @@ ignore warnings about files / links already existing when running the
 
 ## Running the card
 
-Now that we have the package installed, we can run `magnet evaluate`
-on the example card..
+```bash
+# --
+# Build embedding cache
 
-```
-magnet evaluate jhu_ta1/cards/jhu_instance_predict_auc.yaml # [TODO]
-```
+export REPO="$PWD"
+export DATA="$PWD/data/crfm-helm-public/"
+export PYTHONPATH="$REPO"
+export SUITE="$DATA/lite/benchmark_output/runs/_all"
+export CACHE="$REPO/results/embedding-cache-nomic"
+export HF_HOME="$REPO/.cache/huggingface"    # keeps the nomic weights between runs
+mkdir -p "$HF_HOME"
 
-In the log output from the process, you should indications of symbols
-from the evaluation card being resolved, e.g.:
+docker run --rm --gpus all --network host --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp                                                       \
+  -e HF_HOME                                                         \
+  -e PYTHONPATH="$REPO"                                              \
+  -v "$REPO:$REPO"                                                   \
+  -w "$REPO"                                                         \
+  jhu-magnet-dkps-gpu                                                \
+  python -m jhu_ta1.magnet.precompute_embeddings                     \
+    --helm_suite_path  "$SUITE"                                      \
+    --dataset_manifest "$REPO/jhu_ta1/cards/manifest_full.json"      \
+    --cache_dpath      "$CACHE"
 
-```
-...
-Resolving: predictions
-Resolving: prediction_comparisons
-                        run_spec instance_id  prediction_id                 stat_name  predicted_mean  actual_mean
-0   med_qa:model=allenai_olmo-7b     id11718              0               exact_match           0.863          1.0
-1   med_qa:model=allenai_olmo-7b     id11718              0         quasi_exact_match           0.863          1.0
-2   med_qa:model=allenai_olmo-7b     id11718              0        prefix_exact_match           0.863          1.0
-3   med_qa:model=allenai_olmo-7b     id11718              0  quasi_prefix_exact_match           0.863          1.0
-4   med_qa:model=allenai_olmo-7b     id11638              1               exact_match           0.642          1.0
-5   med_qa:model=allenai_olmo-7b     id11638              1         quasi_exact_match           0.642          1.0
-6   med_qa:model=allenai_olmo-7b     id11638              1        prefix_exact_match           0.642          1.0
-7   med_qa:model=allenai_olmo-7b     id11638              1  quasi_prefix_exact_match           0.642          1.0
-8   med_qa:model=allenai_olmo-7b     id10848              2               exact_match           0.909          0.0
-9   med_qa:model=allenai_olmo-7b     id10848              2         quasi_exact_match           0.909          0.0
-10  med_qa:model=allenai_olmo-7b     id10848              2        prefix_exact_match           0.909          0.0
-11  med_qa:model=allenai_olmo-7b     id10848              2  quasi_prefix_exact_match           0.909          0.0
-12  med_qa:model=allenai_olmo-7b     id12252              3               exact_match           0.488          0.0
-13  med_qa:model=allenai_olmo-7b     id12252              3         quasi_exact_match           0.488          0.0
-14  med_qa:model=allenai_olmo-7b     id12252              3        prefix_exact_match           0.488          0.0
-15  med_qa:model=allenai_olmo-7b     id12252              3  quasi_prefix_exact_match           0.488          0.0
-16  med_qa:model=allenai_olmo-7b     id12245              4               exact_match           0.467          0.0
-17  med_qa:model=allenai_olmo-7b     id12245              4         quasi_exact_match           0.467          0.0
-18  med_qa:model=allenai_olmo-7b     id12245              4        prefix_exact_match           0.467          0.0
-19  med_qa:model=allenai_olmo-7b     id12245              4  quasi_prefix_exact_match           0.467          0.0
-20  med_qa:model=allenai_olmo-7b     id11697              5               exact_match           0.788          1.0
-21  med_qa:model=allenai_olmo-7b     id11697              5         quasi_exact_match           0.788          1.0
-22  med_qa:model=allenai_olmo-7b     id11697              5        prefix_exact_match           0.788          1.0
-23  med_qa:model=allenai_olmo-7b     id11697              5  quasi_prefix_exact_match           0.788          1.0
-24  med_qa:model=allenai_olmo-7b     id11891              6               exact_match           0.802          0.0
-25  med_qa:model=allenai_olmo-7b     id11891              6         quasi_exact_match           0.802          0.0
-26  med_qa:model=allenai_olmo-7b     id11891              6        prefix_exact_match           0.802          0.0
-27  med_qa:model=allenai_olmo-7b     id11891              6  quasi_prefix_exact_match           0.802          0.0
-28  med_qa:model=allenai_olmo-7b     id12054              7               exact_match           0.524          0.0
-29  med_qa:model=allenai_olmo-7b     id12054              7         quasi_exact_match           0.524          0.0
-30  med_qa:model=allenai_olmo-7b     id12054              7        prefix_exact_match           0.524          0.0
-31  med_qa:model=allenai_olmo-7b     id12054              7  quasi_prefix_exact_match           0.524          0.0
-Resolving: compute_auc
-Resolving: computed_auc
-...
+
+# --
+# Full manifest, serial
+
+python -m magnet.evaluation_new \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
+  --backend           serial \
+  --container_image   jhu-magnet-dkps-gpu \
+  --container_mounts  "$REPO:$DATA" \
+  --output_path       "$REPO/results/pair-coverage-full" \
+  --params "matrix:
+    materialize_lite.version           : '_all'
+    materialize_lite.precomputed_roots : '$DATA'
+    materialize_lite.download          : never
+    materialize_lite.runs              : 'regex:^(med_qa|legalbench|math|wmt_14)[:,].*'
+    pair_coverage.dataset_manifest     : "$REPO/jhu_ta1/cards/manifest_full.json" 
+    pair_coverage.embedding_cache_path : '$CACHE'
+    pair_coverage.num_replicates       : 128"
+
+# --
+# Full manifest, parallel
+
+python -m magnet.evaluation_new \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
+  --backend           tmux \
+  --tmux_workers      3 \
+  --container_image   jhu-magnet-dkps-gpu \
+  --container_mounts  "$REPO:$DATA" \
+  --output_path       "$REPO/results/pair-coverage-full-split" \
+  --params "matrix:
+    materialize_lite.version           : '_all'
+    materialize_lite.precomputed_roots : '$DATA'
+    materialize_lite.download          : never
+    pair_coverage.dataset_manifest     :
+      - '$REPO/results/manifest_onehot.json'
+      - '$REPO/results/manifest_math.json'
+      - '$REPO/results/manifest_wmt.json'
+    pair_coverage.embedding_cache_path : '$CACHE'
+    pair_coverage.num_replicates       : 128"
 ```
 
 (Note: it's safe to ignore warnings about "dkps.embed: unable to load google-genai")

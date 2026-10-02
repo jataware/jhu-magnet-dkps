@@ -10,7 +10,7 @@ nodes:
     algo_params:
       benchmark: lite
       version: v1.0.0
-      runs: 'regex:^(med_qa|legalbench:subset=(abercrombie|corporate_lobbying))[:,].*'
+      runs: 'regex:^(med_qa|legalbench|math|wmt_14)[:,].*'
     perf_params:
       precomputed_roots: ''
       download: auto
@@ -27,16 +27,16 @@ nodes:
       out_fpath: pair_coverage.json
     primary_out_key: out_fpath
     algo_params:
-      alpha: 0.8
-      query_budgets: '1,2,4,8'
-      n_components_cmds: 8
-      num_replicates: 1024
-      base_seed: 0
-      reference_models: 0
-      embed_provider: sentence-transformers
-      embed_model: nomic-ai/nomic-embed-text-v2-moe
-      confidence_level: 0.95
-      run_id: live-settings-v2
+      alpha             : 0.8       # [Note] Parameter for ensembling DKPS w/ sample mean.
+      query_budgets     : '1,2,4,8' # [Note] Query budgets at which claim is evaluated.
+      n_components_cmds : 8         # [Note] If the number of reference models is small, this needs to be decreased.
+      num_replicates    : 128       # [Note] Increasing this increases likelihood of CONFIRMED, but increases runtime.
+      base_seed         : 0
+      reference_models  : 0
+      embed_provider    : sentence-transformers
+      embed_model       : nomic-ai/nomic-embed-text-v2-moe # [Note] Stronger embedding models like Gemini work better, but this runs locally.
+      confidence_level  : 0.95
+      run_id            : jhu-dkps-pair-coverage-000
 
 edges:
   - materialize_lite.suite_dpath -> pair_coverage.helm_suite_path
