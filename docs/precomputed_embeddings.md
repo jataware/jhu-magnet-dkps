@@ -1,0 +1,134 @@
+# Precompute nomic embeddings once, then run the card against them
+
+Datasets that are not one-hot (MATH, WMT) are embedded with a neural model. Left
+to itself, the card embeds a fresh batch of sampled responses on every replicate,
+and `dkps.embed` builds a new embedder, reloading the model, on each call. The
+embedding cache avoids both: every response is embedded once, and the card reads
+vectors from disk (`--embedding_cache_path`). Only embeddings are reused; query
+sampling, DKPS fits, and OLS predictions are still computed fresh.
+
+`jhu_ta1.magnet.precompute_embeddings` builds that cache for
+`sentence-transformers / nomic-ai/nomic-embed-text-v2-moe`. MedQA and LegalBench
+use one-hot embeddings and are skipped.
+
+## Rebuild the image once
+
+The nomic embedder needs `transformers<5`; its remote modeling code calls
+`get_extended_attention_mask`, which 5.x removed. Images built before the pin
+carry transformers 5 and fail with
+`AttributeError: 'NomicBertModel' object has no attribute 'get_extended_attention_mask'`
+the first time text is encoded, with or without this cache. Rebuild:
+
+```bash
+docker build -t jhu-magnet-dkps-gpu .
+```
+
+## Build the cache (incremental)
+
+```bash
+export REPO="$PWD"
+export DATA="$REPO/data/crfm-helm-public"
+export SUITE="$DATA/lite/benchmark_output/runs/_all"
+export CACHE="$REPO/results/embedding-cache-nomic"
+export HF_HOME="$REPO/.cache/huggingface"     # keeps the model weights between runs
+mkdir -p "$HF_HOME"
+
+# The manifest names the datasets to cache. Add entries to it over time.
+cat > "$REPO/results/manifest_math.json" <<'EOF'
+{"datasets": [
+  {"dataset": "math:subject=algebra", "metric": "math_equiv_chain_of_thought"}
+]}
+EOF
+
+docker run --rm --gpus all --network host --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp -e HF_HOME -e PYTHONPATH="$REPO" \
+  -v "$REPO:$REPO" -w "$REPO" jhu-magnet-dkps-gpu \
+  python -m jhu_ta1.magnet.precompute_embeddings \
+    --helm_suite_path "$SUITE" \
+    --dataset_manifest "$REPO/results/manifest_math.json" \
+    --cache_dpath "$CACHE"
+```
+
+It prints progress every 1% with throughput and a time estimate. To add datasets,
+append them to the manifest and run the same command: datasets already complete in
+the index are skipped. `--datasets NAME [NAME ...]` limits a run to some of the
+manifest's datasets, and `--force` re-embeds datasets that are already cached.
+
+- Every model and every pool item of a dataset is embedded, because the card checks
+  coverage of the whole panel before it starts.
+- Chunk files are named by a hash of their provider, model, and texts. An
+  interrupted run resumes without redoing finished chunks (the index is only written
+  when a whole dataset is done), and ctrl-C is safe.
+- If the HELM responses for a dataset change, it is detected by response hash and
+  the dataset is re-embedded.
+- One cache holds one provider and model. Changing `--embed_model` against an
+  existing cache directory is refused; use a new directory.
+
+## Subsample large datasets (`max_items`)
+
+A manifest entry may carry `max_items` (and optionally `item_seed`, default 0).
+After the models' runs are aligned to their shared items, the loader keeps a seeded
+random subset of that many items, sorted. The draw depends only on the seed and the
+data, not on file or model order. The subsample is the dataset's pool from then on:
+query budgets sample from it, and each target's "full-pool" score is its mean over it.
+
+```json
+{"dataset": "wmt_14:language_pair=cs-en", "metric": "bleu_4",
+ "max_items": 256, "item_seed": 0}
+```
+
+WMT runs carry 1,000 items each, so 5 pairs × ~95 models is 474,000 responses to
+embed; at `max_items: 256` it is about 121,000. MATH subjects are already at most
+135 items.
+
+**Use the same manifest for both steps.** The cache builder and the card both read
+the manifest through the same loader, so they draw the same items. If they disagree
+(different `max_items` or `item_seed`), the card fails fast with
+`Missing cached embedding` instead of using other items. A cache built over a
+larger pool, or the full one, also serves any smaller subsample of it, but not the
+other way round. Pass the same file as `--dataset_manifest` to the cache builder and
+as `pair_coverage.dataset_manifest` to the card.
+
+## Run the card against it
+
+`$REPO` is mounted at its own path, so a cache under it needs no extra mount.
+Point the card at the same manifest the cache was built from (or any manifest whose
+non-one-hot datasets are all in the cache):
+
+```bash
+python -m magnet.evaluation_new \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
+  --backend serial \
+  --container_image jhu-magnet-dkps-gpu \
+  --container_mounts "$REPO:$DATA" \
+  --output_path "$REPO/results/pair-coverage-math-algebra" \
+  --params "matrix:
+    materialize_lite.version: '_all'
+    materialize_lite.precomputed_roots: '$DATA'
+    materialize_lite.download: never
+    materialize_lite.runs: 'regex:^math:subject=algebra,.*'
+    pair_coverage.dataset_manifest: '$REPO/results/manifest_math.json'
+    pair_coverage.embedding_cache_path: '$CACHE'
+    pair_coverage.num_replicates: 32"
+```
+
+`pair_coverage.embedding_cache_path` is an input path, so the container sees it as
+long as it lies under a mounted directory. For a cache elsewhere, add it to
+`--container_mounts` (colon-separated: `"$REPO:$DATA:/path/to/cache"`).
+
+The result's metrics report `cached_embedding_batches` next to `embedding_batches`;
+with a full cache the two are equal. The protocol block records the index checksum.
+
+## Notes
+
+- `$DATA` is the parent of `lite/`, not the `runs/_all` directory: the materializer
+  looks for `<root>/lite/benchmark_output/runs/<version>`.
+- The `docker run` above passes `--gpus all` to embed on the GPU; without it nomic
+  runs on the CPU even on a GPU host. The same applies to card runs without a cache:
+  kwdagger's containers get no GPU unless `magnet.evaluation_new` is given
+  `--container_docker_args '--gpus all'`.
+- On a machine with no GPU, drop `--gpus all` (docker refuses it without the NVIDIA
+  container toolkit) and the container runs nomic on the CPU. Precomputing is the
+  slow step, and it happens once per dataset.
+- The cache's `index.json` records the embedding provider and model, and the card
+  fails fast if they differ from `--embed_provider` / `--embed_model`.

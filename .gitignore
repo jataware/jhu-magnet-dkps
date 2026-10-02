@@ -1,5 +1,9 @@
+results/*
+data/*
 __pycache__
 .cache
 *.egg-info
 *.tar.gz
-NOTES.md
+NOTES.md# pixi environments
+.pixi/*
+!.pixi/config.toml

@@ -1,0 +1,41 @@
+__doc__: |
+  Materialize HELM runs, then compute response embeddings and DKPS fits.
+  One node evaluates all requested budgets and counts improving
+  dataset/model/query-budget tuples, retaining per-budget diagnostics.
+  The manifest declares datasets/metrics, not saved predictions.
+nodes:
+  materialize_lite:
+    class: magnet.process_node.MagnetProcessNode
+    executable: 'python -m magnet.backends.helm.cli.materialize_helm_suite'
+    algo_params:
+      benchmark: lite
+      version: v1.0.0
+      runs: 'regex:^(med_qa|legalbench|math|wmt_14)[:,].*'
+    perf_params:
+      precomputed_roots: ''
+      download: auto
+    out_paths:
+      suite_dpath: benchmark_output/runs/v1.0.0
+      manifest_fpath: materialize_manifest.json
+      done_fpath: DONE
+    primary_out_key: manifest_fpath
+  pair_coverage:
+    class: magnet.process_node.MagnetProcessNode
+    executable: 'python -m jhu_ta1.magnet.pair_coverage'
+    in_paths: [helm_suite_path, dataset_manifest, embedding_cache_path]
+    out_paths:
+      out_fpath: pair_coverage.json
+    primary_out_key: out_fpath
+    algo_params:
+      alpha             : 0.8       # [Note] Parameter for ensembling DKPS w/ sample mean.
+      query_budgets     : '1,2,4,8' # [Note] Query budgets at which claim is evaluated.
+      n_components_cmds : 8         # [Note] If the number of reference models is small, this needs to be decreased.
+      num_replicates    : 64        # [Note] Increasing this increases likelihood of CONFIRMED, but increases runtime. 64 seems like an OK balance between variance and my own impatience.
+      base_seed         : 0
+      reference_models  : 0
+      embed_provider    : sentence-transformers
+      embed_model       : nomic-ai/nomic-embed-text-v2-moe # [Note] Stronger embedding models like Gemini work better, but this runs locally.
+      run_id            : jhu-dkps-pair-coverage-000
+
+edges:
+  - materialize_lite.suite_dpath -> pair_coverage.helm_suite_path
