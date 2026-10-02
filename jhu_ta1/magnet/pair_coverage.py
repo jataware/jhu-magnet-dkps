@@ -208,9 +208,12 @@ def evaluate(
     embed_provider="sentence-transformers",
     embed_model="nomic-ai/nomic-embed-text-v2-moe",
     confidence_level=0.95,
+    embedding_cache_path=None,
     trial_stream=None,
 ):
     """Load HELM once, evaluate every requested combination, and summarize errors."""
+    from dkps.helm import uses_onehot
+
     if (
         not query_budgets
         or len(set(query_budgets)) != len(query_budgets)
@@ -242,12 +245,22 @@ def evaluate(
         dimensions,
     )
 
+    embedding_cache = None
+    if embedding_cache_path:
+        from jhu_ta1.magnet._embedding_cache import CachedResponseEmbeddings
+
+        embedding_cache = CachedResponseEmbeddings(
+            embedding_cache_path, embed_provider, embed_model
+        )
+        embedding_cache.validate(panels)
+
     # Each combination retains its own replicate errors until the final reduction.
     shape = (len(panels), len(query_budgets), num_replicates, len(targets))
     dkps_errors = np.empty(shape)
     sample_errors = np.empty(shape)
     fits = 0
     embedding_batches = 0
+    cached_embedding_batches = 0
 
     for dataset_index, panel in enumerate(panels):
         full_scores = {
@@ -262,7 +275,13 @@ def evaluate(
                 indices = np.sort(
                     query_rng.choice(panel.pool_size, budget, replace=False)
                 )
-                embeddings = embed_queries(panel, indices, embed_provider, embed_model)
+                if embedding_cache is not None and not uses_onehot(panel.dataset):
+                    embeddings = embedding_cache.embed_queries(panel, indices)
+                    cached_embedding_batches += 1
+                else:
+                    embeddings = embed_queries(
+                        panel, indices, embed_provider, embed_model
+                    )
                 embedding_batches += 1
 
                 for model_index, target in enumerate(targets):
@@ -336,6 +355,7 @@ def evaluate(
         n_components_cmds=dimensions,
         dkps_fits=fits,
         embedding_batches=embedding_batches,
+        cached_embedding_batches=cached_embedding_batches,
         reference_models_min=min(counts),
         reference_models_max=max(counts),
     )
@@ -367,6 +387,13 @@ def evaluate(
             for panel in panels
         ],
     }
+    if embedding_cache is not None:
+        result["protocol"]["embedding_cache"] = {
+            "path": str(embedding_cache.directory),
+            "index_sha256": file_hash(embedding_cache.index_path),
+            "provider": embed_provider,
+            "model": embed_model,
+        }
     return result
 
 
@@ -389,6 +416,9 @@ def main(argv=None):
     )
     parser.add_argument("--embed_provider", default="sentence-transformers")
     parser.add_argument("--embed_model", default="nomic-ai/nomic-embed-text-v2-moe")
+    parser.add_argument(
+        "--embedding_cache_path", help="Read-only exported response embeddings"
+    )
     parser.add_argument("--confidence_level", type=float, default=0.95)
     parser.add_argument(
         "--run_id",
@@ -408,6 +438,12 @@ def main(argv=None):
     output = Path(args.out_fpath).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     trial_path = output.with_suffix(".trials.jsonl")
+    # kwdagger serializes an unset optional input path as the literal "None".
+    embedding_cache_path = (
+        None
+        if args.embedding_cache_path in (None, "None")
+        else Path(args.embedding_cache_path).resolve()
+    )
 
     # Embedding helpers may cache text embeddings. Keep their writes in the job
     # directory, including when the checkout and HELM data are read-only mounts.
@@ -424,6 +460,7 @@ def main(argv=None):
             embed_provider=args.embed_provider,
             embed_model=args.embed_model,
             confidence_level=args.confidence_level,
+            embedding_cache_path=embedding_cache_path,
             trial_stream=stream,
         )
     payload["protocol"].update(

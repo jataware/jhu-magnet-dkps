@@ -1,4 +1,4 @@
-"""Run the pair-coverage card through MAGNET/kwdagger with offline Docker workers."""
+"""Run the containerized pair-coverage card on an already assembled HELM suite."""
 
 import argparse
 import json
@@ -11,16 +11,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CARD = ROOT / "jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml"
+PIPELINE = ROOT / "jhu_ta1/magnet/pair_coverage_supplied_pipeline.yaml"
 INFERENCE_ENV = ("OPENAI_API_KEY", "OPENAI_BASE_URL", "HF_TOKEN", "HF_HOME")
 
 
-def controller_environment(output, dkps_root):
+def controller_environment(output, dkps_root=None):
     """Configure local imports and the GNU chmod required by kwdagger on macOS."""
     env = dict(os.environ)
     for name in INFERENCE_ENV:
         env.pop(name, None)
     env.update(
-        PYTHONPATH=os.pathsep.join([str(ROOT), str(dkps_root)]),
+        PYTHONPATH=os.pathsep.join(
+            [str(ROOT)] + ([str(dkps_root)] if dkps_root else [])
+        ),
         PYTHONUNBUFFERED="1",
         XDG_CACHE_HOME=str(output / ".controller-cache"),
     )
@@ -62,28 +65,36 @@ def main(argv=None):
     parser.add_argument("--out_dpath", required=True, type=Path)
     parser.add_argument(
         "--dkps_root",
-        required=True,
         type=Path,
-        help="Checkout containing dkps/__init__.py",
+        help="Optional development override for the DKPS installed in the image",
     )
-    parser.add_argument("--image", default="jhu-magnet-dkps-live:validation")
+    parser.add_argument("--image", default="jhu-magnet-dkps-gpu")
+    parser.add_argument(
+        "--container_docker_args", default="", help="For example: --gpus device=0"
+    )
     parser.add_argument("--num_replicates", type=int, default=1024)
     parser.add_argument("--queries", nargs="+", type=int, default=[1, 2, 4, 8])
     parser.add_argument(
         "--embed_model", help="Embedding model name or local weights path"
     )
+    parser.add_argument("--embed_provider", default="sentence-transformers")
     parser.add_argument(
-        "--embedding_mount", type=Path, help="Read-only local embedding model directory"
+        "--embedding_cache_path",
+        type=Path,
+        help="Exported response embeddings; missing entries fail the run",
+    )
+    parser.add_argument(
+        "--embedding_mount", type=Path, help="Local embedding model directory"
     )
     args = parser.parse_args(argv)
 
     suite = args.helm_suite_path.resolve()
     manifest = args.dataset_manifest.resolve()
     output = args.out_dpath.resolve()
-    dkps_root = args.dkps_root.resolve()
+    dkps_root = args.dkps_root.resolve() if args.dkps_root else None
     if not suite.is_dir() or not manifest.is_file():
         parser.error("Provide an existing HELM suite directory and dataset manifest")
-    if not (dkps_root / "dkps/__init__.py").is_file():
+    if dkps_root and not (dkps_root / "dkps/__init__.py").is_file():
         parser.error("dkps_root must contain dkps/__init__.py")
     if len(set(args.queries)) != len(args.queries) or not set(args.queries) <= {
         1,
@@ -97,7 +108,9 @@ def main(argv=None):
     output.mkdir(parents=True, exist_ok=True)
     env = controller_environment(output, dkps_root)
 
-    mounts = [ROOT, suite, manifest, dkps_root / "dkps", output]
+    mounts = [ROOT, suite, manifest, output]
+    if dkps_root:
+        mounts.append(dkps_root / "dkps")
     if args.embedding_mount:
         weights = args.embedding_mount.resolve()
         if not weights.is_dir():
@@ -116,6 +129,13 @@ def main(argv=None):
     }
     if args.embed_model:
         matrix["pair_coverage.embed_model"] = args.embed_model
+    matrix["pair_coverage.embed_provider"] = args.embed_provider
+    if args.embedding_cache_path:
+        cache = args.embedding_cache_path.resolve()
+        if not (cache / "index.json").is_file():
+            parser.error("embedding_cache_path must contain index.json")
+        mounts.append(cache)
+        matrix["pair_coverage.embedding_cache_path"] = str(cache)
     command = [
         sys.executable,
         "-m",
@@ -131,8 +151,10 @@ def main(argv=None):
         ":".join(map(str, mounts)),
         "--container_env",
         json.dumps(dict.fromkeys(INFERENCE_ENV, "")),
+        "--container_docker_args",
+        args.container_docker_args,
         "--params",
-        json.dumps({"matrix": matrix}),
+        json.dumps({"pipeline": str(PIPELINE), "matrix": matrix}),
     ]
     log = output / f"controller-{run_id}.log"
     print(

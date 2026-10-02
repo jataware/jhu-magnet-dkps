@@ -29,7 +29,9 @@ dependencies = [
     # From PyPI. 0.1.0 is the first release with the kwdagger execution API
     # (magnet.process_node) and the materialize CLI the pipelines use; the
     # [optional] extra brings the HELM loaders and download utility.
+    "aiq-magnet",
     "aiq-magnet[optional]>=0.1.0",
+    "aiq-magnet-theory",
     # Add your other Python dependencies here
     "dkps @ git+https://github.com/jataware/dkps@magnet",
     "httpx>=0.28.1,<0.29",
@@ -45,5 +47,11 @@ dependencies = [
     "PyYAML>=6",
 ]
 
-[tool.uv.sources]
-aiq-magnet = { path = "../aiq-magnet", editable = true }
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+jhu_ta1 = { path = ".", editable = true }
+
+[tool.pixi.tasks]

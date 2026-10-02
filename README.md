@@ -140,11 +140,14 @@ the card is that it is `"VERIFIED"`.
 The `jhu_run_predict_pair_coverage_kwdagger.yaml` card tests whether DKPS has
 lower expected absolute score-estimation error than the same-budget sample mean
 for more than 95% of dataset/model/query-budget combinations. It computes response
-embeddings and DKPS predictions from a supplied HELM suite, using a fixed sample
+embeddings and DKPS predictions from HELM responses, using a fixed sample
 weight of 0.8 and eight DKPS dimensions.
 
+Start with [the containerization guide](docs/containerized_evaluation.md) to build
+the full image and run the card, including downloading its default datasets.
 See [the pair-coverage guide](docs/live_pair_coverage.md) for the dataset manifest,
-Docker runner, output format, and tests.
+output format, and tests, or [the full-run guide](docs/full_pair_coverage.md) for
+the prepared 18-dataset evaluation with cached Google embeddings.
 
 ## Citations
 

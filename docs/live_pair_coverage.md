@@ -17,9 +17,7 @@ Absolute errors are averaged **over replicates within each combination**. Covera
 is the fraction of combinations where DKPS's average error is strictly smaller.
 Each combination has one vote; ties do not improve coverage. No raw MAEs are
 averaged across datasets or budgets. The card passes when pooled coverage exceeds
-95%; it does not require each budget to pass separately. Approximate paired
-one-sided t bounds, corrected across all combinations, are additional diagnostics.
-The verdict uses empirical coverage, not those confidence bounds.
+95%.
 
 ## Inputs
 
@@ -53,38 +51,27 @@ stop the evaluation. Other HELM response layouts need a dedicated adapter.
 
 ## Run with MAGNET and Docker
 
-Build the CPU image from this checkout:
-
-```bash
-docker build -f Dockerfile.live -t jhu-magnet-dkps-live:validation .
-```
-
-For the example MedQA/LegalBench datasets, add `--build-arg TEXT_EMBEDDINGS=0` to
-omit neural embedding packages: those datasets use DKPS's one-hot embeddings.
-
-The host controller requires `aiq-magnet==0.1.0` and `kwdagger==0.4.1`. On macOS,
-GNU coreutils must supply `gchmod` for kwdagger's invocation scripts.
+Use the [standard containerization guide](containerized_evaluation.md) to build
+`Dockerfile` and run the card through MAGNET's materialize-and-evaluate pipeline.
+For an already assembled suite, the helper skips materialization:
 
 ```bash
 python scripts/run_pair_coverage.py \
   --helm_suite_path /absolute/path/to/helm/runs/v1.0.0 \
   --dataset_manifest "$PWD/jhu_ta1/magnet/pair_coverage_datasets.example.json" \
-  --dkps_root /absolute/path/to/dkps \
-  --out_dpath /absolute/path/to/results
+  --out_dpath "$PWD/results/pair-coverage"
 ```
 
-The default is 1,024 replicates at budgets 1, 2, 4, and 8, submitted as one job
-and one pooled evidence row. Use `--num_replicates 128` for a smaller run or
-`--queries 1 2` to select budgets. Each invocation has a unique run ID to force
-execution; sampling uses a separate deterministic seed.
+The default image is `jhu-magnet-dkps-gpu`, with DKPS installed inside it. Optional
+`--dkps_root /path/to/dkps` overrides that installed library for development.
+The default is 1,024 replicates at budgets 1, 2, 4, and 8, in one evidence row.
+Use `--num_replicates 32` for a smaller run or `--queries 1 2` to select budgets.
+The helper assigns a unique run ID to force new fits without changing the seed.
 
-The controller prints its log path and the native MAGNET verdict. A completed
-`FALSIFIED` verdict is a valid result. Workers have no network, inference
-credentials, or Docker socket; code and data are read-only and only job output is
-writable. For text embeddings, supply local weights with
-`--embed_model /path/to/weights --embedding_mount /path/to/weights`. The worker
-cannot download weights. Embedding helpers may reuse identical text embeddings;
-fitted DKPS predictions are always recomputed.
+For text embeddings, the image includes sentence-transformers. Supply local
+weights with `--embed_model /path/to/weights --embedding_mount /path/to/weights`,
+or let the embedding provider download them. A completed `FALSIFIED` verdict is
+a valid experimental outcome. The helper prints its log path and verdict.
 
 ## Run directly and inspect results
 
@@ -110,3 +97,6 @@ Run the focused tests in an environment with DKPS and MAGNET installed:
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+For the historical 18-dataset pools and cached Google response embeddings, see
+[the full-run preparation and execution guide](full_pair_coverage.md).

@@ -35,8 +35,7 @@ kwdagger:
   pipeline: ../magnet/pair_coverage_pipeline.yaml
   result_node: pair_coverage
   matrix:
-    pair_coverage.helm_suite_path: null
-    pair_coverage.dataset_manifest: null
+    pair_coverage.dataset_manifest: jhu_ta1/magnet/pair_coverage_datasets.example.json
     # One scalar parameter keeps all budgets inside the same evidence row.
     pair_coverage.query_budgets: '1,2,4,8'
 symbols:

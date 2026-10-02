@@ -1,24 +1,9 @@
 __doc__: |
-  Materialize HELM runs, then compute response embeddings and DKPS fits.
+  Fresh response embeddings and DKPS fits from a supplied HELM suite.
   One node evaluates all requested budgets and counts improving
   dataset/model/query-budget tuples, retaining per-budget diagnostics.
   The manifest declares datasets/metrics, not saved predictions.
 nodes:
-  materialize_lite:
-    class: magnet.process_node.MagnetProcessNode
-    executable: 'python -m magnet.backends.helm.cli.materialize_helm_suite'
-    algo_params:
-      benchmark: lite
-      version: v1.0.0
-      runs: 'regex:^(med_qa|legalbench:subset=(abercrombie|corporate_lobbying))[:,].*'
-    perf_params:
-      precomputed_roots: ''
-      download: auto
-    out_paths:
-      suite_dpath: benchmark_output/runs/v1.0.0
-      manifest_fpath: materialize_manifest.json
-      done_fpath: DONE
-    primary_out_key: manifest_fpath
   pair_coverage:
     class: magnet.process_node.MagnetProcessNode
     executable: 'python -m jhu_ta1.magnet.pair_coverage'
@@ -37,6 +22,3 @@ nodes:
       embed_model: nomic-ai/nomic-embed-text-v2-moe
       confidence_level: 0.95
       run_id: live-settings-v2
-
-edges:
-  - materialize_lite.suite_dpath -> pair_coverage.helm_suite_path

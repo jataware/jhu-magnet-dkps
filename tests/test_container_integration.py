@@ -1,11 +1,8 @@
 import importlib.util
 import json
-import os
-import shlex
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import yaml
 
@@ -61,36 +58,26 @@ class ContainerIntegrationTests(unittest.TestCase):
         card = root / "jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml"
         NewEvaluationRecipeSchema.model_validate(yaml.safe_load(card.read_text()))
 
-    def test_offline_command_limits_mounts_and_does_not_forward_credentials(self):
-        from jhu_ta1.magnet.offline_helm_node import OfflineHelmProcessNode
+    def test_standard_pipeline_connects_materialization_to_evaluation(self):
+        from kwdagger.yaml_pipeline import load_yaml_pipeline
+        from magnet.process_node import MagnetProcessNode
 
-        with tempfile.TemporaryDirectory() as directory:
-            node = OfflineHelmProcessNode(
-                name="test", executable="python -m test", node_dpath=directory
-            )
-            node.container_image = "test-image"
-            node.container_mounts = [directory, "/tmp/a path with spaces"]
-            node.container_env = {
-                "OPENAI_API_KEY": "must-not-forward",
-                "HF_TOKEN": "must-not-forward",
-            }
-            with patch.dict(
-                os.environ,
-                {"OPENAI_API_KEY": "must-not-forward", "HF_TOKEN": "must-not-forward"},
-            ):
-                prefix = node._container_command_prefix()
-            parts = shlex.split(prefix)
-            self.assertEqual(parts.count("--network"), 1)
-            self.assertEqual(parts[parts.index("--network") + 1], "none")
-            self.assertNotIn("must-not-forward", prefix)
-            self.assertNotIn("OPENAI_API_KEY", prefix)
-            self.assertNotIn("HF_TOKEN", prefix)
-            mounts = [parts[i + 1] for i, part in enumerate(parts) if part == "-v"]
-            self.assertTrue(all(mount.endswith(":ro") for mount in mounts[:-1]))
-            expected = Path(node.final_node_dpath).resolve()
-            self.assertEqual(mounts[-1], f"{expected}:{expected}:rw")
-            self.assertNotIn("docker.sock", prefix)
-            self.assertIn('-w "$PWD"', prefix)
+        root = Path(__file__).resolve().parents[1]
+        pipeline_path = root / "jhu_ta1/magnet/pair_coverage_pipeline.yaml"
+        pipeline = load_yaml_pipeline(pipeline_path)
+        self.assertEqual(set(pipeline.node_dict), {"materialize_lite", "pair_coverage"})
+        for node in pipeline.node_dict.values():
+            self.assertIs(type(node), MagnetProcessNode)
+        evaluator = pipeline.node_dict["pair_coverage"]
+        self.assertTrue(evaluator.inputs["helm_suite_path"].pred)
+
+        # Supplying a prepared suite must not change the evaluation protocol.
+        supplied_path = root / "jhu_ta1/magnet/pair_coverage_supplied_pipeline.yaml"
+        standard = yaml.safe_load(pipeline_path.read_text())
+        supplied = yaml.safe_load(supplied_path.read_text())
+        self.assertEqual(
+            standard["nodes"]["pair_coverage"], supplied["nodes"]["pair_coverage"]
+        )
 
 
 if __name__ == "__main__":
