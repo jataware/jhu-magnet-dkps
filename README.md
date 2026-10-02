@@ -121,10 +121,9 @@ python -m magnet.evaluation_new \
 Once the card has been fully evaluated, you should see something like the following:
 
 ```
-Estimator: sample weight=0.8, DKPS dimensions=8
-Evaluation: 18 datasets, 94 models, budgets [1, 2, 4, 8], 10 replicates per combination
-Completed: 6768/6768 combinations, 67680 DKPS fits
-Claim: 6474/6768 combinations improve (95.66%); required: more than 95%
+Evaluation: 18 datasets, 94 models, budgets [1, 2, 4, 8], 64 replicates per combination
+Completed: 6768/6768 combinations, 433152 DKPS fits
+Claim: 6549/6768 combinations improve (96.76%); required: more than 95%
 ...
 INFO     ================================  evaluation.py:448
 INFO     RESULT:      VERIFIED             evaluation.py:449
