@@ -57,7 +57,7 @@ budgets 1, 2, 4, and 8:
 
 ```bash
 python -m magnet.evaluation_new \
-  jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
   --output_path "$REPO/results/pair-coverage-smoke" \
   --backend serial \
   --container_image jhu-magnet-dkps-gpu \
@@ -77,7 +77,7 @@ To use an existing bucket mirror, set `DATA` to a directory containing
 ```bash
 export DATA=/absolute/path/to/crfm-helm-public
 python -m magnet.evaluation_new \
-  jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
   --output_path "$REPO/results/pair-coverage" \
   --backend serial \
   --container_image jhu-magnet-dkps-gpu \

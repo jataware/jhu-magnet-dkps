@@ -31,7 +31,7 @@ HELM datasets; the second computes the embeddings and DKPS predictions:
 
 ```bash
 python -m magnet.evaluation_new \
-  jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
   --backend serial \
   --output_path "$REPO/results/smoke-native" \
   --params "matrix:
@@ -47,7 +47,7 @@ Use the full Dockerfile and the same card:
 docker build -t jhu-magnet-dkps-gpu .
 
 python -m magnet.evaluation_new \
-  jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
   --backend serial \
   --output_path "$REPO/results/smoke-docker" \
   --container_image jhu-magnet-dkps-gpu \

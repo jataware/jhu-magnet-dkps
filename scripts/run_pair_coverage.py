@@ -16,7 +16,7 @@ INFERENCE_ENV = ("OPENAI_API_KEY", "OPENAI_BASE_URL", "HF_TOKEN", "HF_HOME")
 
 
 def controller_environment(output, dkps_root=None):
-    """Configure local imports and the GNU chmod required by kwdagger on macOS."""
+    """Configure local imports and the GNU tools required by kwdagger on macOS."""
     env = dict(os.environ)
     for name in INFERENCE_ENV:
         env.pop(name, None)
@@ -28,18 +28,19 @@ def controller_environment(output, dkps_root=None):
         XDG_CACHE_HOME=str(output / ".controller-cache"),
     )
     if sys.platform == "darwin":
-        gchmod = shutil.which("gchmod")
-        if not gchmod:
-            raise RuntimeError(
-                "macOS requires GNU coreutils (gchmod) for kwdagger invoke scripts"
-            )
         bin_directory = output / ".host-bin"
         bin_directory.mkdir(exist_ok=True)
-        chmod = bin_directory / "chmod"
-        if not chmod.exists():
-            chmod.symlink_to(gchmod)
-        if chmod.resolve() != Path(gchmod).resolve():
-            raise RuntimeError("Unexpected host-bin/chmod symlink")
+        for name in ("chmod", "ln"):
+            executable = shutil.which(f"g{name}")
+            if not executable:
+                raise RuntimeError(
+                    f"macOS requires GNU coreutils (g{name}) for kwdagger scripts"
+                )
+            link = bin_directory / name
+            if not link.exists():
+                link.symlink_to(executable)
+            if link.resolve() != Path(executable).resolve():
+                raise RuntimeError(f"Unexpected host-bin/{name} symlink")
         env["PATH"] = str(bin_directory) + os.pathsep + env.get("PATH", "")
     return env
 
