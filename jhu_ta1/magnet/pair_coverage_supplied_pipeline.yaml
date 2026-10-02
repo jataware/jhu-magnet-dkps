@@ -20,5 +20,4 @@ nodes:
       reference_models: 0
       embed_provider: sentence-transformers
       embed_model: nomic-ai/nomic-embed-text-v2-moe
-      confidence_level: 0.95
       run_id: live-settings-v2

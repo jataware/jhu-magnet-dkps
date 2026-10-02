@@ -26,11 +26,42 @@ organizations: [JHU]
 submitter:
   name: Ben Johnson
   email: ben@jataware.com
-tags: [dkps, pair-coverage, benchmark-evaluation, live-helm]
+tags:
+  - dkps
+  - pair-coverage
+  - query-efficient-benchmarking
+  - benchmark-evaluation
+  - live-helm
+  - helm-lite
+  - med_qa
+  - legalbench
+  - math
+  - wmt_14
 links:
-  - title: DKPS
-    url: https://github.com/jataware/dkps
-    type: code
+  - title: "DKPS"
+    url: "https://github.com/jataware/dkps"
+    type: "code"
+  - title: "Statistical inference on black-box generative models in the data kernel perspective space"
+    url: "https://arxiv.org/abs/2410.01106"
+    type: "publication"
+  - title: "Query-efficient model evaluation using cached responses"
+    url: "https://arxiv.org/abs/2605.07096"
+    type: "publication"
+  - title: "med_qa"
+    url: "https://huggingface.co/datasets/bigbio/med_qa"
+    type: "dataset"
+  - title: "legalbench"
+    url: "https://huggingface.co/datasets/nguha/legalbench"
+    type: "dataset"
+  - title: "MATH"
+    url: "https://github.com/hendrycks/math"
+    type: "dataset"
+  - title: "wmt_14"
+    url: "https://huggingface.co/datasets/wmt/wmt14"
+    type: "dataset"
+  - title: "Precomputed HELM lite benchmark outputs"
+    url: "https://console.cloud.google.com/storage/browser/crfm-helm-public/lite"
+    type: "asset"
 kwdagger:
   pipeline: ../magnet/pair_coverage_pipeline.yaml
   result_node: pair_coverage

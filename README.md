@@ -3,7 +3,9 @@ MAGNET evaluation framework.
 
 The example algorithm, provided by the JHU team, predicts whether or
 not a model will produce the correct answer for a given question based
-on the performance of similar models in Data Kernel Perspective Space (DKPS) [1]
+on the performance of similar models in Data Kernel Perspective Space (DKPS) [1].
+The pair-coverage card estimates a model's benchmark score from a small number
+of queries, following the query-efficient evaluation approach of [2].
 
 ## Setup
 
@@ -112,72 +114,29 @@ python -m magnet.evaluation_new \
     pair_coverage.dataset_manifest     : "$REPO/jhu_ta1/cards/manifest_full.json" 
     pair_coverage.embedding_cache_path : '$CACHE'
     pair_coverage.num_replicates       : 128"
-
-# --
-# Full manifest, parallel
-
-python -m magnet.evaluation_new \
-  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
-  --backend           tmux \
-  --tmux_workers      3 \
-  --container_image   jhu-magnet-dkps-gpu \
-  --container_mounts  "$REPO:$DATA" \
-  --output_path       "$REPO/results/pair-coverage-full-split" \
-  --params "matrix:
-    materialize_lite.version           : '_all'
-    materialize_lite.precomputed_roots : '$DATA'
-    materialize_lite.download          : never
-    pair_coverage.dataset_manifest     :
-      - '$REPO/results/manifest_onehot.json'
-      - '$REPO/results/manifest_math.json'
-      - '$REPO/results/manifest_wmt.json'
-    pair_coverage.embedding_cache_path : '$CACHE'
-    pair_coverage.num_replicates       : 128"
 ```
 
-(Note: it's safe to ignore warnings about "dkps.embed: unable to load google-genai")
-
-Once the card has been fully evaluated, you should see the following:
+Once the card has been fully evaluated, you should see something like the following:
 
 ```
-================================
-Settings Evaluated: 3
-  Verified:     1.00
-  Falsified:    0.00
-  Inconclusive: 0.00
-================================
+Estimator: sample weight=0.8, DKPS dimensions=8
+Evaluation: 18 datasets, 94 models, budgets [1, 2, 4, 8], 10 replicates per combination
+Completed: 6768/6768 combinations, 67680 DKPS fits
+Claim: 6474/6768 combinations improve (95.66%); required: more than 95%
+...
+INFO     ================================  evaluation.py:448
+INFO     RESULT:      VERIFIED             evaluation.py:449
+INFO     ================================  evaluation.py:454
+INFO     CARD STATUS: EVALUATED            evaluation.py:455
 
-
-Title:       JHU DKPS based per-instance metric prediction
-Description: We can predict whether a particular model will produce the correct output based on the performance of similar models in Data Kernel Perspective Space (DKPS)
-
-================================
-CLAIM:       
-assert computed_auc > auc_threshold, assert_failed_msg
-
-================================
-RESULT:      VERIFIED
-================================
-CARD STATUS: EVALUATED
 ```
 
-This output indicates that three variations of the evaluation card
-have been evaluated (the example card sweeps over three different seed
-values for random evaluation set selection).  In this case all three
-variations have been verified (claim passed), so the final `RESULT` of
-the card is that it is `"VERIFIED"`.
+*Note:* If you want to run faster, you can set `pair_coverage.num_replicates` to 8, 16, 32, etc.  That will make the evaluation run faster but increases noise / reduces statistical significance of results.
 
-## Dataset–model–budget coverage
-
-The `jhu_run_predict_pair_coverage_kwdagger.yaml` card tests whether DKPS has
-lower expected absolute score-estimation error than the same-budget sample mean
-for more than 95% of dataset/model/query-budget combinations. It computes response
-embeddings and DKPS predictions from a supplied HELM suite, using a fixed sample
-weight of 0.8 and eight DKPS dimensions.
-
-See [the pair-coverage guide](docs/live_pair_coverage.md) for the dataset manifest,
-Docker runner, output format, and tests.
+*Also Note:* I tried to increase the parallelism here, but because of the way the aggregation works, the manifests were getting aggregated independently, and the 95% check being applied to each on their own.  The likelihood that _one_ of the individal splits doesn't meet the 95% mark is increased, so probability to reject _one_ of the splits and thus the _whole_ claim is increased.  So - I'm sure there are better ways to parallelize - but need to make sure that everything gets re-combined before the final 95% test.
 
 ## Citations
 
 [1] Hayden Helm, Aranyak Acharyya, Youngser Park, Brandon Duderstadt, and Carey Priebe. 2025. Statistical inference on black-box generative models in the data kernel perspective space. In Findings of the Association for Computational Linguistics: ACL 2025, pages 3955–3970, Vienna, Austria. Association for Computational Linguistics.
+
+[2] Hayden Helm, Ben Johnson, and Carey Priebe. 2026. Query-efficient model evaluation using cached responses. arXiv preprint arXiv:2605.07096. https://arxiv.org/abs/2605.07096

@@ -12,7 +12,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import t
 
 from jhu_ta1.magnet._helm_pair_data import file_hash, load_panels
 
@@ -41,11 +40,10 @@ def embed_queries(panel, indices, provider, model):
             for index in indices
         ]
     )
-    frame = prepare_responses(
-        frame,
-        panel.dataset,
-        references=[panel.references[index] for index in indices],
-    )
+    # The label space comes from the whole pool, not just the sampled items, so a
+    # well-formed wrong answer keeps its own class instead of collapsing into
+    # "unrecognized". Reference labels are item content, not model scores.
+    frame = prepare_responses(frame, panel.dataset, references=panel.references)
     frame = compute_embeddings(frame, panel.dataset, provider, model)
     return make_embedding_dict(frame)
 
@@ -74,8 +72,12 @@ def predict(
     raw_prediction = float(
         np.clip(regressor.predict(coordinates[target][None])[0], 0, 1)
     )
+    # ^ Note: We're assuming all metrics are in [0, 1]
+    
+    # ensemble DKPS prediction w/ sample mean
     sample_mean = float(np.mean(target_query_scores))
-    prediction = alpha * sample_mean + (1 - alpha) * raw_prediction
+    prediction  = alpha * sample_mean + (1 - alpha) * raw_prediction
+    
     return prediction, sample_mean, raw_prediction
 
 
@@ -85,13 +87,10 @@ def summarize_errors(
     datasets,
     models,
     query_budgets,
-    *,
-    confidence_level=0.95,
 ):
     """Average replicates within each combination, then count strict improvements.
 
-    Arrays have axes (dataset, query budget, replicate, target model). The
-    confidence bounds describe Monte Carlo uncertainty and do not set the verdict.
+    Arrays have axes (dataset, query budget, replicate, target model).
     """
     dkps_errors = np.asarray(dkps_errors)
     sample_errors = np.asarray(sample_errors)
@@ -110,18 +109,10 @@ def summarize_errors(
         raise ValueError("Invalid dataset/model/budget/replicate panel")
     if not np.isfinite(dkps_errors).all() or not np.isfinite(sample_errors).all():
         raise ValueError("Non-finite prediction errors")
-    if not 0 < confidence_level < 1:
-        raise ValueError("Confidence level must be between zero and one")
 
     gains = sample_errors - dkps_errors
     expected_gains = gains.mean(axis=2)
     num_settings = expected_gains.size
-    # Paired one-sided t bounds, Bonferroni-corrected across all combinations.
-    critical_value = t.ppf(
-        1 - (1 - confidence_level) / num_settings, num_replicates - 1
-    )
-    standard_errors = gains.std(axis=2, ddof=1) / np.sqrt(num_replicates)
-    lower_bounds = expected_gains - critical_value * standard_errors
     dkps_mae = dkps_errors.mean(axis=2)
     sample_mae = sample_errors.mean(axis=2)
 
@@ -138,7 +129,6 @@ def summarize_errors(
                         "dkps_mae": float(dkps_mae[index]),
                         "sample_mae": float(sample_mae[index]),
                         "expected_gain": float(expected_gains[index]),
-                        "gain_lower_confidence": float(lower_bounds[index]),
                     }
                 )
 
@@ -156,7 +146,6 @@ def summarize_errors(
         )
 
     improved = int((expected_gains > 0).sum())
-    confident = int((lower_bounds > 0).sum())
     metrics = {
         "num_datasets": num_datasets,
         "num_models": num_models,
@@ -167,10 +156,6 @@ def summarize_errors(
         "num_settings": num_settings,
         "settings_improved": improved,
         "setting_improvement_fraction": improved / num_settings,
-        "settings_improved_with_confidence": confident,
-        "setting_improvement_fraction_with_confidence": confident / num_settings,
-        "confidence_level": confidence_level,
-        "confidence_comparisons": num_settings,
     }
     return {
         "result": {"metrics": metrics},
@@ -207,7 +192,6 @@ def evaluate(
     reference_models=0,
     embed_provider="sentence-transformers",
     embed_model="nomic-ai/nomic-embed-text-v2-moe",
-    confidence_level=0.95,
     embedding_cache_path=None,
     trial_stream=None,
 ):
@@ -228,8 +212,6 @@ def evaluate(
         or base_seed < 0
     ):
         raise ValueError("Invalid estimator or replicate settings")
-    if not 0 < confidence_level < 1:
-        raise ValueError("Confidence level must be between zero and one")
 
     panels, targets = load_panels(suite_path, manifest)
     for panel in panels:
@@ -275,13 +257,13 @@ def evaluate(
                 indices = np.sort(
                     query_rng.choice(panel.pool_size, budget, replace=False)
                 )
+                
+                # load embeddings
                 if embedding_cache is not None and not uses_onehot(panel.dataset):
                     embeddings = embedding_cache.embed_queries(panel, indices)
                     cached_embedding_batches += 1
                 else:
-                    embeddings = embed_queries(
-                        panel, indices, embed_provider, embed_model
-                    )
+                    embeddings = embed_queries(panel, indices, embed_provider, embed_model)
                 embedding_batches += 1
 
                 for model_index, target in enumerate(targets):
@@ -347,7 +329,6 @@ def evaluate(
         [panel.dataset for panel in panels],
         targets,
         query_budgets,
-        confidence_level=confidence_level,
     )
     counts = [reference_models or len(references) for references in banks.values()]
     result["result"]["metrics"].update(
@@ -372,7 +353,6 @@ def evaluate(
         else f"{reference_models} sampled per target/replicate",
         "target_truth": "item mean on the aligned unperturbed evaluation pool, used only for evaluation",
         "coverage_unit": "dataset/model/query-budget tuple",
-        "confidence": "approximate paired one-sided t bounds, Bonferroni over all evaluated combinations",
         "embed_provider": embed_provider,
         "embed_model": embed_model,
         "sources": [
@@ -419,7 +399,6 @@ def main(argv=None):
     parser.add_argument(
         "--embedding_cache_path", help="Read-only exported response embeddings"
     )
-    parser.add_argument("--confidence_level", type=float, default=0.95)
     parser.add_argument(
         "--run_id",
         default="manual",
@@ -459,7 +438,6 @@ def main(argv=None):
             reference_models=args.reference_models,
             embed_provider=args.embed_provider,
             embed_model=args.embed_model,
-            confidence_level=args.confidence_level,
             embedding_cache_path=embedding_cache_path,
             trial_stream=stream,
         )

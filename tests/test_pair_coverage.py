@@ -315,7 +315,6 @@ class LivePairTests(unittest.TestCase):
             m = result["result"]["metrics"]
             self.assertEqual(m["num_settings"], 4)
             self.assertEqual(m["dkps_fits"], 8)
-            self.assertEqual(m["confidence_comparisons"], 4)
             rows = [json.loads(line) for line in stream.getvalue().splitlines()]
             self.assertEqual(len(rows), 8)
             self.assertEqual({r["n_eval"] for r in rows}, {1, 2})
@@ -352,7 +351,6 @@ class LivePairTests(unittest.TestCase):
             embedding_batches=160,
             settings_improved=384,
             setting_improvement_fraction=0.96,
-            setting_improvement_fraction_with_confidence=0.90,
         )
         self.run_claim(values)
         for update, message in [
