@@ -155,6 +155,16 @@ def load_panel(suite_path, config):
     common = sorted(set.intersection(*(set(v) for v in items.values())))
     if not common:
         raise ValueError(f"{dataset}: no shared items across model runs")
+    if config.get("max_items") is not None:
+        # Subsample the aligned pool. The draw is over the sorted shared items, so
+        # it depends only on the seed and the data, never on file or model order.
+        limit = int(config["max_items"])
+        if limit < 1:
+            raise ValueError(f"{dataset}: max_items must be positive")
+        if limit < len(common):
+            rng = np.random.default_rng(int(config.get("item_seed", 0)))
+            keep = sorted(rng.choice(len(common), limit, replace=False).tolist())
+            common = [common[i] for i in keep]
     return Panel(
         dataset=dataset,
         metric=metric,

@@ -64,6 +64,31 @@ manifest's datasets, and `--force` re-embeds datasets that are already cached.
 - One cache holds one provider and model. Changing `--embed_model` against an
   existing cache directory is refused; use a new directory.
 
+## Subsample large datasets (`max_items`)
+
+A manifest entry may carry `max_items` (and optionally `item_seed`, default 0).
+After the models' runs are aligned to their shared items, the loader keeps a seeded
+random subset of that many items, sorted. The draw depends only on the seed and the
+data, not on file or model order. The subsample is the dataset's pool from then on:
+query budgets sample from it, and each target's "full-pool" score is its mean over it.
+
+```json
+{"dataset": "wmt_14:language_pair=cs-en", "metric": "bleu_4",
+ "max_items": 256, "item_seed": 0}
+```
+
+WMT runs carry 1,000 items each, so 5 pairs × ~95 models is 474,000 responses to
+embed; at `max_items: 256` it is about 121,000. MATH subjects are already at most
+135 items.
+
+**Use the same manifest for both steps.** The cache builder and the card both read
+the manifest through the same loader, so they draw the same items. If they disagree
+(different `max_items` or `item_seed`), the card fails fast with
+`Missing cached embedding` instead of using other items. A cache built over a
+larger pool, or the full one, also serves any smaller subsample of it, but not the
+other way round. Pass the same file as `--dataset_manifest` to the cache builder and
+as `pair_coverage.dataset_manifest` to the card.
+
 ## Run the card against it
 
 `$REPO` is mounted at its own path, so a cache under it needs no extra mount.
