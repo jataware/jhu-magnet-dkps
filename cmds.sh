@@ -7,6 +7,7 @@ export DATA="$PWD/data/crfm-helm-public/"
 export PYTHONPATH="$REPO"
 
 # smoke test - med_qa only
+mkdir -p $REPO/results
 cat > $REPO/results/manifest_med_qa.json <<'EOF'
 {
   "datasets": [
@@ -39,6 +40,28 @@ cat > $REPO/results/manifest_math_algebra.json <<'EOF'
 }
 EOF
 
+  {"datasets": [
+    {"dataset": "med_qa",                                      "metric": "quasi_exact_match"},
+    {"dataset": "legalbench:subset=abercrombie",               "metric": "quasi_exact_match"},
+    {"dataset": "legalbench:subset=corporate_lobbying",        "metric": "quasi_exact_match"},
+    {"dataset": "legalbench:subset=function_of_decision_section", "metric": "quasi_exact_match"},
+    {"dataset": "legalbench:subset=international_citizenship_questions", "metric": "quasi_exact_match"},
+    {"dataset": "legalbench:subset=proa",                      "metric": "quasi_exact_match"},
+    {"dataset": "math:subject=number_theory",            "metric": "math_equiv_chain_of_thought"},
+    {"dataset": "math:subject=geometry",                 "metric": "math_equiv_chain_of_thought"},
+    {"dataset": "math:subject=counting_and_probability", "metric": "math_equiv_chain_of_thought"},
+    {"dataset": "math:subject=intermediate_algebra",     "metric": "math_equiv_chain_of_thought"},
+    {"dataset": "math:subject=precalculus",              "metric": "math_equiv_chain_of_thought"},
+    {"dataset": "math:subject=prealgebra",               "metric": "math_equiv_chain_of_thought"},
+    {"dataset": "math:subject=algebra",                  "metric": "math_equiv_chain_of_thought"},
+    {"dataset": "wmt_14:language_pair=cs-en", "metric": "bleu_4"},
+    {"dataset": "wmt_14:language_pair=de-en", "metric": "bleu_4"},
+    {"dataset": "wmt_14:language_pair=fr-en", "metric": "bleu_4"},
+    {"dataset": "wmt_14:language_pair=hi-en", "metric": "bleu_4"},
+    {"dataset": "wmt_14:language_pair=ru-en", "metric": "bleu_4"}
+  ]}
+
+
 # --
 # math:subject=algebra: precompute nomic embeddings once, then run the card on them.
 # (med_qa / legalbench are one-hot and need no cache; math/wmt use the nomic embedder.)
@@ -56,13 +79,28 @@ export CACHE="$REPO/results/embedding-cache-nomic"
 export HF_HOME="$REPO/.cache/huggingface"    # keeps the nomic weights between runs
 mkdir -p "$HF_HOME"
 
-docker run --rm --network host --user "$(id -u):$(id -g)" \
+# >>
+# docker run --rm --gpus all --network host --user "$(id -u):$(id -g)" \
+#   -e HOME=/tmp -e HF_HOME -e PYTHONPATH="$REPO" \
+#   -v "$REPO:$REPO" -w "$REPO" jhu-magnet-dkps-gpu \
+#   python -m jhu_ta1.magnet.precompute_embeddings \
+#     --helm_suite_path  "$SUITE" \
+#     --dataset_manifest "$REPO/results/manifest_math_algebra.json" \
+#     --cache_dpath      "$CACHE"
+# --
+export CACHE_CL="$REPO/results/embedding-cache-nomic-clustering"
+
+docker run --rm --gpus all --network host --user "$(id -u):$(id -g)" \
   -e HOME=/tmp -e HF_HOME -e PYTHONPATH="$REPO" \
-  -v "$REPO:$REPO" -w "$REPO" jhu-magnet-dkps-gpu \
+  -v "$REPO:$REPO" -w "$REPO" \
+  -v "$REPO/.cache/dkps-patch/embed.py:/opt/conda/lib/python3.11/site-packages/dkps/embed.py:ro" \
+  jhu-magnet-dkps-gpu \
   python -m jhu_ta1.magnet.precompute_embeddings \
     --helm_suite_path  "$SUITE" \
     --dataset_manifest "$REPO/results/manifest_math_algebra.json" \
-    --cache_dpath      "$CACHE"
+    --cache_dpath      "$CACHE_CL"
+# <<
+
 
 # 2. Run the card against the cache. Same command as without a cache, plus
 #    embedding_cache_path; metrics should then report cached_embedding_batches ==
@@ -80,5 +118,5 @@ python -m magnet.evaluation_new \
     materialize_lite.download: never
     materialize_lite.runs: 'regex:^math:subject=algebra,.*'
     pair_coverage.dataset_manifest: '$REPO/results/manifest_math_algebra.json'
-    pair_coverage.embedding_cache_path: '$CACHE'
-    pair_coverage.num_replicates: 32"
+    pair_coverage.embedding_cache_path: '$CACHE_CL'
+    pair_coverage.num_replicates: 128"
