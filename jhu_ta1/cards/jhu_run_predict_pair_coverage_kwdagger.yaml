@@ -12,8 +12,8 @@ description: |
        random samples of m queries.
     3. For each sample, embed responses and fit DKPS using reference models
        and their benchmark scores, excluding the target's provider family.
-       Estimate the target's score as:
-         dkps_score = 0.8*sample_mean + 0.2*dkps_prediction
+       Estimate the target's score as a weighted average of the sample mean
+       and the raw DKPS prediction.
     4. Compare DKPS and the same-query sample mean with the target's
        full-pool benchmark score. Record each estimate's absolute error.
     5. Average each method's absolute errors over the repeated samples,

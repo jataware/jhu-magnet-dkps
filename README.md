@@ -75,6 +75,9 @@ ignore warnings about files / links already existing when running the
 ```bash
 # --
 # Build embedding cache
+# Note: There may be a way to do this more cleanly inside kwdagger.  The way things
+# were implemented for now, it was easier to precompute + cache it outside.  If this
+# causes problems for Kitware, we can try to fix.
 
 export REPO="$PWD"
 export DATA="$PWD/data/crfm-helm-public/"
@@ -115,6 +118,13 @@ python -m magnet.evaluation_new \
     pair_coverage.embedding_cache_path : '$CACHE'
     pair_coverage.num_replicates       : 128"
 ```
+
+*GPU:* kwdagger launches each node with a plain `docker run`, so the containers do
+not see the GPU unless you ask for it. With a complete embedding cache this does not
+matter (`pair_coverage` only reads vectors and fits DKPS, which is CPU work). Without
+a cache, `pair_coverage` embeds MATH and WMT responses itself, and does so on the CPU
+unless you add `--container_docker_args '--gpus all'` (or `'--gpus device=0'`) to
+the `magnet.evaluation_new` command.
 
 Once the card has been fully evaluated, you should see something like the following:
 

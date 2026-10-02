@@ -330,12 +330,12 @@ class LivePairTests(unittest.TestCase):
         pipeline = yaml.safe_load(
             (root / "jhu_ta1/magnet/pair_coverage_pipeline.yaml").read_text()
         )
-        self.assertEqual(
-            pipeline["nodes"]["pair_coverage"]["algo_params"]["alpha"], 0.8
-        )
-        self.assertEqual(
-            card["kwdagger"]["matrix"]["pair_coverage.query_budgets"], "1,2,4,8"
-        )
+        algo_params = pipeline["nodes"]["pair_coverage"]["algo_params"]
+        self.assertEqual(algo_params["alpha"], 0.8)
+        # Budgets live in the pipeline as one scalar, so all of them land in the
+        # same evidence row; the card must not split them across matrix rows.
+        self.assertEqual(algo_params["query_budgets"], "1,2,4,8")
+        self.assertNotIn("pair_coverage.query_budgets", card["kwdagger"]["matrix"])
         self.assertNotIn("pair_coverage.n_eval", card["kwdagger"]["matrix"])
         values = dict(
             alpha=0.8,

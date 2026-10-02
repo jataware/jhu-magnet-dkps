@@ -40,7 +40,7 @@ cat > "$REPO/results/manifest_math.json" <<'EOF'
 ]}
 EOF
 
-docker run --rm --network host --user "$(id -u):$(id -g)" \
+docker run --rm --gpus all --network host --user "$(id -u):$(id -g)" \
   -e HOME=/tmp -e HF_HOME -e PYTHONPATH="$REPO" \
   -v "$REPO:$REPO" -w "$REPO" jhu-magnet-dkps-gpu \
   python -m jhu_ta1.magnet.precompute_embeddings \
@@ -123,7 +123,12 @@ with a full cache the two are equal. The protocol block records the index checks
 
 - `$DATA` is the parent of `lite/`, not the `runs/_all` directory: the materializer
   looks for `<root>/lite/benchmark_output/runs/<version>`.
-- On a machine with no GPU the container runs nomic on the CPU. Precomputing is the
+- The `docker run` above passes `--gpus all` to embed on the GPU; without it nomic
+  runs on the CPU even on a GPU host. The same applies to card runs without a cache:
+  kwdagger's containers get no GPU unless `magnet.evaluation_new` is given
+  `--container_docker_args '--gpus all'`.
+- On a machine with no GPU, drop `--gpus all` (docker refuses it without the NVIDIA
+  container toolkit) and the container runs nomic on the CPU. Precomputing is the
   slow step, and it happens once per dataset.
 - The cache's `index.json` records the embedding provider and model, and the card
   fails fast if they differ from `--embed_provider` / `--embed_model`.
