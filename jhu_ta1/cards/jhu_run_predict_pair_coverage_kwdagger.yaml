@@ -71,6 +71,14 @@ symbols:
   coverage_threshold:
     type: float
     value: 0.95
+pair_coverage.setting_improvement_fraction:
+  metadata:
+    display_name: "Coverage"
+    display: True
+    define_metric:
+      objective: maximize
+      aggregation_strategy:
+        type: 'mean'
 claim:
   python: |
     m = metrics.pair_coverage
