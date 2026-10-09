@@ -43,12 +43,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Runtime dependencies, mirroring pyproject.toml minus aiq-magnet. dkps is the
 # DKPS library; sentence-transformers and einops back the local nomic embedder
-# used by the text-embedding datasets.
+# used by the text-embedding datasets. transformers stays below 5: nomic's remote
+# modeling code calls PreTrainedModel.get_extended_attention_mask, which 5.x
+# removed, so encoding fails with an AttributeError on 5.x.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system \
         'dkps @ git+https://github.com/jataware/dkps@magnet' \
         'httpx>=0.28.1,<0.29' \
         'sentence-transformers>=3.1' \
+        'transformers<5' \
         'einops>=0.8'
 
 # This repo, without dependencies so it uses the magnet pinned above rather

@@ -3,7 +3,9 @@ MAGNET evaluation framework.
 
 The example algorithm, provided by the JHU team, predicts whether or
 not a model will produce the correct answer for a given question based
-on the performance of similar models in Data Kernel Perspective Space (DKPS) [1]
+on the performance of similar models in Data Kernel Perspective Space (DKPS) [1].
+The pair-coverage card estimates a model's benchmark score from a small number
+of queries, following the query-efficient evaluation approach of [2].
 
 ## Setup
 
@@ -21,19 +23,35 @@ uv pip install .
 ### Downloading HELM results
 
 The example evaluation card requires precomputed HELM results on the
-helm-lite benchmark (specifically for the `med_qa` scenario).  If you
-do not already have these downloaded, the magnet framework provides a
-download utility for these results.  You can run the follow commands
-to download and link them into a single `_all` directory.
+helm-lite benchmark.  If you do not already have these downloaded, the magnet 
+framework provides a download utility for these results. You can run the following
+commands to download and link them into a single `_all` directory.
 
-```
-mkdir -p data/crfm-helm-public/lite/benchmark_output/runs/_all
+```bash
+function download_dataset {
+  DST=$1
+  DATASET=$2
+  mkdir -p $DST
+  magnet download helm --benchmark=lite --list-versions | while read version; do
+      magnet download helm data/crfm-helm-public --benchmark=lite --version="$version" --runs "regex:${DATASET}.*"
+      (cd $DST && ln -s "../$version"/* .)
+  done
+}
 
-magnet download helm --benchmark=lite --list-versions | while read version; do
-    magnet download helm data/crfm-helm-public --benchmark=lite --version="$version" --runs "regex:wmt.*"
-    (cd data/crfm-helm-public/lite/benchmark_output/runs/_all && ln -s "../$version"/* .)
-done
+DST=data/crfm-helm-public/lite/benchmark_output/runs/_all
+download_dataset $DST "wmt"
+download_dataset $DST "math"
+download_dataset $DST "med_qa"
+download_dataset $DST "legalbench"
+
+find $(dirname $DST) -type d | fgrep anthropic_claude-3-5-haiku-20241022 |\
+  fgrep ',stop=none' | xargs -I {} rm -r {}
+
+find $(dirname $DST) -type d | fgrep google_gemini-2.0-flash-exp |\
+  fgrep ',stop=none' | xargs -I {} rm -r {}
 ```
+
+### Linking pre-downloaded HELM results
 
 If you do already have them downloaded but not linked into a single
 `_all` directory you can run the following:
@@ -41,7 +59,10 @@ If you do already have them downloaded but not linked into a single
 ```
 mkdir -p data/crfm-helm-public/lite/benchmark_output/runs/_all
 cd data/crfm-helm-public/lite/benchmark_output/runs/_all
+ln -s /path/to/existing/helm/lite/runs/*/wmt* .
+ln -s /path/to/existing/helm/lite/runs/*/math* .
 ln -s /path/to/existing/helm/lite/runs/*/med_qa* .
+ln -s /path/to/existing/helm/lite/runs/*/legalbench* .
 cd -
 ```
 
@@ -51,90 +72,73 @@ ignore warnings about files / links already existing when running the
 
 ## Running the card
 
-Now that we have the package installed, we can run `magnet evaluate`
-on the example card..
+```bash
+# --
+# Build embedding cache
+# Note: There may be a way to do this more cleanly inside kwdagger.  The way things
+# were implemented for now, it was easier to precompute + cache it outside.  If this
+# causes problems for Kitware, we can try to fix.
+
+export REPO="$PWD"
+export DATA="$PWD/data/crfm-helm-public/"
+export PYTHONPATH="$REPO"
+export SUITE="$DATA/lite/benchmark_output/runs/_all"
+export CACHE="$REPO/results/embedding-cache-nomic"
+export HF_HOME="$REPO/.cache/huggingface"    # keeps the nomic weights between runs
+mkdir -p "$HF_HOME"
+
+docker run --rm --gpus all --network host --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp                                                       \
+  -e HF_HOME                                                         \
+  -e PYTHONPATH="$REPO"                                              \
+  -v "$REPO:$REPO"                                                   \
+  -w "$REPO"                                                         \
+  jhu-magnet-dkps-gpu                                                \
+  python -m jhu_ta1.magnet.precompute_embeddings                     \
+    --helm_suite_path  "$SUITE"                                      \
+    --dataset_manifest "$REPO/jhu_ta1/cards/manifest_full.json"      \
+    --cache_dpath      "$CACHE"
+
+
+# --
+# Full manifest, serial
+
+python -m magnet.evaluation_new \
+  "$REPO/jhu_ta1/cards/jhu_run_predict_pair_coverage_kwdagger.yaml" \
+  --backend           serial \
+  --container_image   jhu-magnet-dkps-gpu \
+  --container_mounts  "$REPO:$DATA" \
+  --output_path       "$REPO/results/pair-coverage-full" \
+  --params "matrix:
+    materialize_lite.version           : '_all'
+    materialize_lite.precomputed_roots : '$DATA'
+    materialize_lite.download          : never
+    materialize_lite.runs              : 'regex:^(med_qa|legalbench|math|wmt_14)[:,].*'
+    pair_coverage.dataset_manifest     : "$REPO/jhu_ta1/cards/manifest_full.json" 
+    pair_coverage.embedding_cache_path : '$CACHE'"
+```
+
+Once the card has been fully evaluated, you should see something like the following:
 
 ```
-magnet evaluate jhu_ta1/cards/jhu_instance_predict_auc.yaml
-```
-
-In the log output from the process, you should indications of symbols
-from the evaluation card being resolved, e.g.:
-
-```
+Evaluation: 18 datasets, 94 models, budgets [1, 2, 4, 8], 64 replicates per combination
+Completed: 6768/6768 combinations, 433152 DKPS fits
+Claim: 6549/6768 combinations improve (96.76%); required: more than 95%
 ...
-Resolving: predictions
-Resolving: prediction_comparisons
-                        run_spec instance_id  prediction_id                 stat_name  predicted_mean  actual_mean
-0   med_qa:model=allenai_olmo-7b     id11718              0               exact_match           0.863          1.0
-1   med_qa:model=allenai_olmo-7b     id11718              0         quasi_exact_match           0.863          1.0
-2   med_qa:model=allenai_olmo-7b     id11718              0        prefix_exact_match           0.863          1.0
-3   med_qa:model=allenai_olmo-7b     id11718              0  quasi_prefix_exact_match           0.863          1.0
-4   med_qa:model=allenai_olmo-7b     id11638              1               exact_match           0.642          1.0
-5   med_qa:model=allenai_olmo-7b     id11638              1         quasi_exact_match           0.642          1.0
-6   med_qa:model=allenai_olmo-7b     id11638              1        prefix_exact_match           0.642          1.0
-7   med_qa:model=allenai_olmo-7b     id11638              1  quasi_prefix_exact_match           0.642          1.0
-8   med_qa:model=allenai_olmo-7b     id10848              2               exact_match           0.909          0.0
-9   med_qa:model=allenai_olmo-7b     id10848              2         quasi_exact_match           0.909          0.0
-10  med_qa:model=allenai_olmo-7b     id10848              2        prefix_exact_match           0.909          0.0
-11  med_qa:model=allenai_olmo-7b     id10848              2  quasi_prefix_exact_match           0.909          0.0
-12  med_qa:model=allenai_olmo-7b     id12252              3               exact_match           0.488          0.0
-13  med_qa:model=allenai_olmo-7b     id12252              3         quasi_exact_match           0.488          0.0
-14  med_qa:model=allenai_olmo-7b     id12252              3        prefix_exact_match           0.488          0.0
-15  med_qa:model=allenai_olmo-7b     id12252              3  quasi_prefix_exact_match           0.488          0.0
-16  med_qa:model=allenai_olmo-7b     id12245              4               exact_match           0.467          0.0
-17  med_qa:model=allenai_olmo-7b     id12245              4         quasi_exact_match           0.467          0.0
-18  med_qa:model=allenai_olmo-7b     id12245              4        prefix_exact_match           0.467          0.0
-19  med_qa:model=allenai_olmo-7b     id12245              4  quasi_prefix_exact_match           0.467          0.0
-20  med_qa:model=allenai_olmo-7b     id11697              5               exact_match           0.788          1.0
-21  med_qa:model=allenai_olmo-7b     id11697              5         quasi_exact_match           0.788          1.0
-22  med_qa:model=allenai_olmo-7b     id11697              5        prefix_exact_match           0.788          1.0
-23  med_qa:model=allenai_olmo-7b     id11697              5  quasi_prefix_exact_match           0.788          1.0
-24  med_qa:model=allenai_olmo-7b     id11891              6               exact_match           0.802          0.0
-25  med_qa:model=allenai_olmo-7b     id11891              6         quasi_exact_match           0.802          0.0
-26  med_qa:model=allenai_olmo-7b     id11891              6        prefix_exact_match           0.802          0.0
-27  med_qa:model=allenai_olmo-7b     id11891              6  quasi_prefix_exact_match           0.802          0.0
-28  med_qa:model=allenai_olmo-7b     id12054              7               exact_match           0.524          0.0
-29  med_qa:model=allenai_olmo-7b     id12054              7         quasi_exact_match           0.524          0.0
-30  med_qa:model=allenai_olmo-7b     id12054              7        prefix_exact_match           0.524          0.0
-31  med_qa:model=allenai_olmo-7b     id12054              7  quasi_prefix_exact_match           0.524          0.0
-Resolving: compute_auc
-Resolving: computed_auc
-...
-```
-
-(Note: it's safe to ignore warnings about "dkps.embed: unable to load google-genai")
-
-Once the card has been fully evaluated, you should see the following:
+INFO     ================================  evaluation.py:448
+INFO     RESULT:      VERIFIED             evaluation.py:449
+INFO     ================================  evaluation.py:454
+INFO     CARD STATUS: EVALUATED            evaluation.py:455
 
 ```
-================================
-Settings Evaluated: 3
-  Verified:     1.00
-  Falsified:    0.00
-  Inconclusive: 0.00
-================================
 
-
-Title:       JHU DKPS based per-instance metric prediction
-Description: We can predict whether a particular model will produce the correct output based on the performance of similar models in Data Kernel Perspective Space (DKPS)
-
-================================
-CLAIM:       
-assert computed_auc > auc_threshold, assert_failed_msg
-
-================================
-RESULT:      VERIFIED
-================================
-CARD STATUS: EVALUATED
-```
-
-This output indicates that three variations of the evaluation card
-have been evaluated (the example card sweeps over three different seed
-values for random evaluation set selection).  In this case all three
-variations have been verified (claim passed), so the final `RESULT` of
-the card is that it is `"VERIFIED"`.
+### Run Notes
+- If you want to run faster, you can set `pair_coverage.num_replicates` to 8, 16, 32, etc.  That will make the evaluation run faster but increases noise / reduces statistical significance of results.
+- I tried to increase the parallelism here, but because of the way the aggregation works, the manifests were getting aggregated independently, and the 95% check being applied to each on their own.  The likelihood that _one_ of the individal splits doesn't meet the 95% mark is increased, so probability to reject _one_ of the splits and thus the _whole_ claim is increased.  So - I'm sure there are better ways to parallelize - but need to make sure that everything gets re-combined before the final 95% test.
+- kwdagger launches each node with a plain `docker run`, so the containers do not see the GPU unless you ask for it. With a complete embedding cache this does not matter (`pair_coverage` only reads vectors and fits DKPS, which is CPU work). Without a cache, `pair_coverage` embeds MATH and WMT responses itself, and does so on the CPU unless you add `--container_docker_args '--gpus all'` (or `'--gpus device=0'`) to the `magnet.evaluation_new` command.
 
 ## Citations
 
 [1] Hayden Helm, Aranyak Acharyya, Youngser Park, Brandon Duderstadt, and Carey Priebe. 2025. Statistical inference on black-box generative models in the data kernel perspective space. In Findings of the Association for Computational Linguistics: ACL 2025, pages 3955–3970, Vienna, Austria. Association for Computational Linguistics.
+
+[2] Hayden Helm, Ben Johnson, and Carey Priebe. 2026. Query-efficient model evaluation using cached responses. arXiv preprint arXiv:2605.07096. https://arxiv.org/abs/2605.07096

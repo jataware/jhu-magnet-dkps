@@ -1,0 +1,76 @@
+{
+  "datasets": [
+    {
+      "dataset": "math:subject=algebra",
+      "metric": "math_equiv_chain_of_thought"
+    },
+    {
+      "dataset": "math:subject=counting_and_probability",
+      "metric": "math_equiv_chain_of_thought"
+    },
+    {
+      "dataset": "math:subject=geometry",
+      "metric": "math_equiv_chain_of_thought"
+    },
+    {
+      "dataset": "math:subject=intermediate_algebra",
+      "metric": "math_equiv_chain_of_thought"
+    },
+    {
+      "dataset": "math:subject=number_theory",
+      "metric": "math_equiv_chain_of_thought"
+    },
+    {
+      "dataset": "math:subject=prealgebra",
+      "metric": "math_equiv_chain_of_thought"
+    },
+    {
+      "dataset": "math:subject=precalculus",
+      "metric": "math_equiv_chain_of_thought"
+    },
+    {
+      "dataset": "wmt_14:language_pair=cs-en",
+      "metric": "meteor"
+    },
+    {
+      "dataset": "wmt_14:language_pair=de-en",
+      "metric": "meteor"
+    },
+    {
+      "dataset": "wmt_14:language_pair=fr-en",
+      "metric": "meteor"
+    },
+    {
+      "dataset": "wmt_14:language_pair=hi-en",
+      "metric": "meteor"
+    },
+    {
+      "dataset": "wmt_14:language_pair=ru-en",
+      "metric": "meteor"
+    },
+    {
+      "dataset": "legalbench:subset=abercrombie",
+      "metric": "quasi_exact_match"
+    },
+    {
+      "dataset": "legalbench:subset=corporate_lobbying",
+      "metric": "quasi_exact_match"
+    },
+    {
+      "dataset": "legalbench:subset=function_of_decision_section",
+      "metric": "quasi_exact_match"
+    },
+    {
+      "dataset": "legalbench:subset=international_citizenship_questions",
+      "metric": "quasi_exact_match"
+    },
+    {
+      "dataset": "legalbench:subset=proa",
+      "metric": "quasi_exact_match"
+    },
+    {
+      "dataset": "med_qa",
+      "metric": "quasi_exact_match"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "datasets": [
+    {"dataset": "med_qa", "metric": "quasi_exact_match"},
+    {"dataset": "legalbench:subset=abercrombie", "metric": "quasi_exact_match"},
+    {"dataset": "legalbench:subset=corporate_lobbying", "metric": "quasi_exact_match"}
+  ]
+}
